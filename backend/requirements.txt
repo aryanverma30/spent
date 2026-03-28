@@ -1,0 +1,15 @@
+# ─── Web framework ────────────────────────────────────────────────────────────
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+
+# ─── Database ─────────────────────────────────────────────────────────────────
+sqlalchemy==2.0.30          # async ORM
+asyncpg==0.29.0             # async PostgreSQL driver (used by SQLAlchemy)
+alembic==1.13.1             # database migration tool
+
+# ─── Validation & settings ────────────────────────────────────────────────────
+pydantic==2.7.1             # request/response validation (v2 API)
+pydantic-settings==2.2.1    # reads settings from .env via BaseSettings
+
+# ─── Utilities ────────────────────────────────────────────────────────────────
+python-dotenv==1.0.1        # loads .env file into os.environ
