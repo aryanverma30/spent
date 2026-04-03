@@ -1,43 +1,80 @@
-"""
-AI categorization service — Phase 3.
+"""AI service for parsing transactions and generating insights using Claude."""
+import json
+import anthropic
+from app.config import settings
 
-This service will call the Anthropic Claude API to parse a raw expense
-string (e.g. "12 chipotle bowl") and return:
-  - merchant:       "Chipotle"
-  - category:       "food"
-  - ai_confidence:  0.95
+CATEGORIES = [
+    "Food & Drink",
+    "Transport",
+    "Entertainment",
+    "Shopping",
+    "Health",
+    "Utilities",
+    "Travel",
+    "Other",
+]
 
-It will be called from the POST /transactions endpoint when `category`
-is not provided in the request body.
-
-Supported categories (to be defined in Phase 3):
-    food, transport, entertainment, shopping, health, utilities, other
-"""
-
-from app.config import settings  # noqa: F401  (will be used in Phase 3)
+_client: anthropic.Anthropic | None = None
 
 
-async def categorize(raw_input: str) -> dict:
-    """
-    Use Claude to infer merchant, category, and confidence from raw_input.
+def get_client() -> anthropic.Anthropic:
+    """Return a cached Anthropic client (lazy initialization)."""
+    global _client
+    if _client is None:
+        _client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    return _client
 
-    Args:
-        raw_input: The raw expense string, e.g. "12 chipotle bowl"
 
-    Returns:
-        A dict with keys: merchant, category, ai_confidence
+PARSE_SYSTEM_PROMPT = """You are a personal finance assistant. Extract spending information from the user's message
+and return ONLY valid JSON with this exact schema:
+{ "amount": float, "merchant": string, "category": string, "confidence": float }
 
-    TODO (Phase 3):
-        1. Build a prompt that asks Claude to extract merchant and category
-        2. Call the Anthropic API with the prompt
-        3. Parse the response JSON
-        4. Return the structured result
+Allowed categories (use EXACTLY one of these strings):
+Food & Drink, Transport, Entertainment, Shopping, Health, Utilities, Travel, Other
 
-    For now, returns a placeholder so the service can be imported without error.
-    """
-    # TODO (Phase 3): Replace with real Claude API call
-    return {
-        "merchant": raw_input,
-        "category": "other",
-        "ai_confidence": None,
-    }
+Rules:
+- amount must be a positive float (strip $ signs)
+- merchant should be a clean, capitalized name
+- confidence is 0-1 representing how sure you are
+- If the message is not a valid spending entry, return: { "error": "not_a_transaction" }
+- Return ONLY the JSON object, no other text"""
+
+INSIGHTS_SYSTEM_PROMPT = """You are a friendly personal finance coach. Given the user's spending breakdown,
+write a 2-3 sentence summary. Be specific with numbers. Be encouraging but honest.
+Do not use bullet points."""
+
+
+async def parse_transaction(raw_input: str) -> dict:
+    """Parse a natural language spending message into structured data using Claude."""
+    client = get_client()
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=256,
+        system=PARSE_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": raw_input}],
+    )
+    text = message.content[0].text.strip()
+    return json.loads(text)
+
+
+async def generate_insights(breakdown: list[dict], days_remaining: int) -> str:
+    """Generate a 2-3 sentence spending summary using Claude."""
+    client = get_client()
+    if not breakdown:
+        return "No spending recorded yet this period. Start logging expenses to see insights!"
+
+    breakdown_text = "\n".join(
+        f"- {item['category']}: ${item['total']:.2f} ({item['count']} transactions)"
+        for item in breakdown
+    )
+    user_message = (
+        f"Days remaining in period: {days_remaining}\n\nSpending breakdown:\n{breakdown_text}"
+    )
+
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=256,
+        system=INSIGHTS_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_message}],
+    )
+    return message.content[0].text.strip()
