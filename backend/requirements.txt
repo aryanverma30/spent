@@ -13,3 +13,10 @@ pydantic-settings==2.2.1    # reads settings from .env via BaseSettings
 
 # ─── Utilities ────────────────────────────────────────────────────────────────
 python-dotenv==1.0.1        # loads .env file into os.environ
+
+# ─── AI ───────────────────────────────────────────────────────────────────────
+anthropic==0.28.0           # Anthropic Claude API client
+
+# ─── Charts ───────────────────────────────────────────────────────────────────
+matplotlib==3.9.0           # headless chart generation
+numpy==1.26.4               # numerical support for matplotlib
