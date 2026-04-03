@@ -1,4 +1,3 @@
-# Phase 2 dependencies — uncomment when implementing the Telegram bot
-# python-telegram-bot==21.3
-# httpx==0.27.0          # for calling the FastAPI backend
-# python-dotenv==1.0.1
+python-telegram-bot==21.3
+httpx==0.27.0
+python-dotenv==1.0.1
