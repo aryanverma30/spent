@@ -1,76 +1,247 @@
-// Spent Widget — Phase 4
-// A Scriptable widget that displays your spending donut chart on the iOS home screen.
+// ============================================================
+// Spent — iOS Scriptable Widget
+// ============================================================
 //
-// HOW TO USE (Phase 4):
-//   1. Install Scriptable from the App Store (free)
-//   2. Paste this script into a new Scriptable script
-//   3. Set BACKEND_URL to your deployed backend URL
-//   4. Add a Scriptable widget to your home screen and select this script
+// INSTALLATION:
+// 1. Install the free "Scriptable" app from the App Store
+// 2. Open Scriptable and tap the "+" button to create a new script
+// 3. Paste this entire file into the editor
+// 4. Change BASE_URL below to your backend URL (Railway, local IP, etc.)
+// 5. Add a Scriptable widget to your home screen
+// 6. Long-press the widget → Edit Widget → choose this script
+// 7. Set widget size to "Medium" for best results
 //
-// WHAT IT WILL DO:
-//   - Calls GET /api/v1/summary to fetch category totals
-//   - Renders a donut chart with spending by category
-//   - Shows total spend for the current month
-//   - Updates automatically when the widget refreshes (every ~15 minutes)
+// PERIOD PREFERENCE:
+// To change the period, run this script in the Scriptable app and
+// tap the period button in the preview. It saves to Keychain.
+// Allowed values: "monthly", "weekly", "daily"
+// ============================================================
 
-// ─── Configuration ────────────────────────────────────────────────────────────
+// ── Configuration ──────────────────────────────────────────
+const BASE_URL = "https://your-app.railway.app"; // ← Update this!
+const PERIOD_KEY = "spent_period";
+const DARK_BG = new Color("#1A1A2E");
+const ACCENT = new Color("#4ECDC4");
+const WHITE = Color.white();
+const GRAY = new Color("#AAAAAA");
 
-// TODO (Phase 4): Replace with your deployed backend URL
-// For local testing you can use ngrok to expose localhost:8000
-const BACKEND_URL = "https://your-backend-url.com"
-const API_PATH = "/api/v1/summary"
-
-// ─── Color palette for categories ─────────────────────────────────────────────
-
+// ── Category colors matching backend ───────────────────────
 const CATEGORY_COLORS = {
-  food:          new Color("#FF6B6B"),
-  transport:     new Color("#4ECDC4"),
-  entertainment: new Color("#45B7D1"),
-  shopping:      new Color("#96CEB4"),
-  health:        new Color("#FFEAA7"),
-  utilities:     new Color("#DDA0DD"),
-  other:         new Color("#B0BEC5"),
+  "Food & Drink": "#FF6B6B",
+  "Transport": "#4ECDC4",
+  "Entertainment": "#45B7D1",
+  "Shopping": "#96CEB4",
+  "Health": "#FFEAA7",
+  "Utilities": "#DDA0DD",
+  "Travel": "#F0A500",
+  "Other": "#B0BEC5",
+};
+
+// ── Period management ───────────────────────────────────────
+function getSavedPeriod() {
+  if (Keychain.contains(PERIOD_KEY)) {
+    return Keychain.get(PERIOD_KEY);
+  }
+  return "monthly";
 }
 
-// ─── Main widget logic ────────────────────────────────────────────────────────
-
-async function fetchSummary() {
-  // TODO (Phase 4): Fetch spending summary from the backend
-  // const req = new Request(`${BACKEND_URL}${API_PATH}`)
-  // return await req.loadJSON()
-  return null
+function cyclePeriod(current) {
+  const periods = ["monthly", "weekly", "daily"];
+  const next = periods[(periods.indexOf(current) + 1) % periods.length];
+  Keychain.set(PERIOD_KEY, next);
+  return next;
 }
 
-async function buildWidget(summary) {
-  const widget = new ListWidget()
-  widget.backgroundColor = new Color("#1C1C1E")
+function capitalize(str) {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+// ── API helpers ─────────────────────────────────────────────
+async function fetchSummary(period) {
+  try {
+    const req = new Request(`${BASE_URL}/api/v1/summary?period=${period}`);
+    req.timeoutInterval = 10;
+    return await req.loadJSON();
+  } catch (e) {
+    console.error("fetchSummary failed: " + e.message);
+    return null;
+  }
+}
+
+async function fetchDonutChart(period) {
+  try {
+    const req = new Request(`${BASE_URL}/api/v1/charts/donut?period=${period}`);
+    req.timeoutInterval = 15;
+    return await req.loadImage();
+  } catch (e) {
+    console.error("fetchDonutChart failed: " + e.message);
+    return null;
+  }
+}
+
+// ── Widget builder ──────────────────────────────────────────
+async function buildWidget(summary, chartImg, period) {
+  const widget = new ListWidget();
+  widget.backgroundColor = DARK_BG;
+  widget.setPadding(12, 14, 12, 14);
+  widget.url = `${BASE_URL}/api/v1/summary?period=${period}`;
+
+  // Header row: icon + title + period badge
+  const headerStack = widget.addStack();
+  headerStack.layoutHorizontally();
+  headerStack.centerAlignContent();
+
+  const titleText = headerStack.addText("💸 Spent");
+  titleText.textColor = WHITE;
+  titleText.font = Font.boldSystemFont(13);
+
+  headerStack.addSpacer();
+
+  const periodBadge = headerStack.addText(capitalize(period));
+  periodBadge.textColor = ACCENT;
+  periodBadge.font = Font.mediumSystemFont(11);
+
+  widget.addSpacer(6);
 
   if (!summary) {
-    // TODO (Phase 4): Show a "not available" state with a reload prompt
-    const text = widget.addText("Spent — data unavailable")
-    text.textColor = Color.white()
-    return widget
+    // Error state
+    const errStack = widget.addStack();
+    errStack.layoutVertically();
+    errStack.centerAlignContent();
+
+    const errText = errStack.addText("⚠️ Can't connect");
+    errText.textColor = new Color("#FF6B6B");
+    errText.font = Font.mediumSystemFont(12);
+    errText.centerAlignText();
+
+    const hintText = errStack.addText("Check BASE_URL in script");
+    hintText.textColor = GRAY;
+    hintText.font = Font.systemFont(10);
+    hintText.centerAlignText();
+
+    return widget;
   }
 
-  // TODO (Phase 4):
-  //   1. Draw a donut chart using DrawContext
-  //   2. Add category labels and amounts
-  //   3. Show the monthly total at the top
-  //   4. Style with the CATEGORY_COLORS palette
+  // Main content row: chart on left, breakdown on right
+  const contentStack = widget.addStack();
+  contentStack.layoutHorizontally();
+  contentStack.centerAlignContent();
 
-  return widget
+  // Chart image (left column)
+  if (chartImg) {
+    const imgStack = contentStack.addStack();
+    imgStack.layoutVertically();
+    imgStack.centerAlignContent();
+
+    const img = imgStack.addImage(chartImg);
+    img.imageSize = new Size(80, 80);
+    img.centerAlignImage();
+
+    imgStack.addSpacer(4);
+
+    const totalLabel = imgStack.addText(`$${summary.total_spent.toFixed(2)}`);
+    totalLabel.textColor = WHITE;
+    totalLabel.font = Font.boldSystemFont(14);
+    totalLabel.centerAlignText();
+  } else {
+    // Placeholder if chart failed to load
+    const placeholder = contentStack.addText("📊");
+    placeholder.font = Font.systemFont(40);
+  }
+
+  contentStack.addSpacer(12);
+
+  // Category breakdown (right column)
+  const breakdownStack = contentStack.addStack();
+  breakdownStack.layoutVertically();
+  breakdownStack.centerAlignContent();
+
+  const breakdown = summary.breakdown || [];
+  const topItems = breakdown.slice(0, 4); // show top 4 categories
+
+  for (const item of topItems) {
+    const rowStack = breakdownStack.addStack();
+    rowStack.layoutHorizontally();
+    rowStack.centerAlignContent();
+
+    // Color dot
+    const colorHex = CATEGORY_COLORS[item.category] || "#B0BEC5";
+    const dot = rowStack.addText("●");
+    dot.textColor = new Color(colorHex);
+    dot.font = Font.systemFont(8);
+
+    rowStack.addSpacer(4);
+
+    // Category name (truncated)
+    const shortName = item.category.split(" ")[0]; // "Food" from "Food & Drink"
+    const nameText = rowStack.addText(shortName);
+    nameText.textColor = GRAY;
+    nameText.font = Font.systemFont(10);
+
+    rowStack.addSpacer();
+
+    // Amount
+    const amtText = rowStack.addText(`$${item.total.toFixed(0)}`);
+    amtText.textColor = WHITE;
+    amtText.font = Font.mediumSystemFont(10);
+
+    breakdownStack.addSpacer(3);
+  }
+
+  if (breakdown.length === 0) {
+    const emptyText = breakdownStack.addText("No data yet");
+    emptyText.textColor = GRAY;
+    emptyText.font = Font.systemFont(11);
+  }
+
+  widget.addSpacer();
+
+  // Footer: last updated
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const footer = widget.addText(`Updated ${timeStr}`);
+  footer.textColor = GRAY;
+  footer.font = Font.systemFont(8);
+
+  return widget;
 }
 
-// ─── Entry point ──────────────────────────────────────────────────────────────
+// ── Main ────────────────────────────────────────────────────
+async function run() {
+  const period = getSavedPeriod();
 
-const summary = await fetchSummary()
-const widget = await buildWidget(summary)
+  // If running in app (not widget), allow period cycling via table menu
+  if (!config.runsInWidget) {
+    const alert = new Alert();
+    alert.title = "💸 Spent Widget";
+    alert.message = `Current period: ${capitalize(period)}\nChange it below or tap Preview to see the widget.`;
+    alert.addAction("Switch to " + capitalize(cyclePeriod(period)));
+    alert.addAction("Preview Widget");
+    alert.addCancelAction("Cancel");
 
-if (config.runsInWidget) {
-  Script.setWidget(widget)
-} else {
-  // Preview in Scriptable app
-  widget.presentSmall()
+    const choice = await alert.present();
+    if (choice === 0) {
+      // Already cycled in cyclePeriod above — just preview with new period
+    }
+    // Fall through to build widget for preview
+  }
+
+  // Fetch data in parallel
+  const [summary, chartImg] = await Promise.all([
+    fetchSummary(period),
+    fetchDonutChart(period),
+  ]);
+
+  const widget = await buildWidget(summary, chartImg, period);
+
+  if (config.runsInWidget) {
+    Script.setWidget(widget);
+  } else {
+    // Preview in app
+    widget.presentMedium();
+  }
+
+  Script.complete();
 }
 
-Script.complete()
+await run();
