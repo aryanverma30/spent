@@ -55,5 +55,5 @@ async def get_trends(
     return {
         "period": period,
         "buckets": buckets,
-        "chart_url": f"/api/v1/charts/trend?period=period",
+        "chart_url": f"/api/v1/charts/trend?period={period}",
     }
