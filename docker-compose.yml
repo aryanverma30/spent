@@ -28,6 +28,8 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      PYTHONPATH: /app
     depends_on:
       postgres:
         condition: service_healthy   # wait for postgres to be ready
