@@ -6,7 +6,7 @@
 // 1. Install the free "Scriptable" app from the App Store
 // 2. Open Scriptable and tap the "+" button to create a new script
 // 3. Paste this entire file into the editor
-// 4. Change BASE_URL below to your backend URL (Railway, local IP, etc.)
+// 4. Change BASE_URL below to your ngrok or Railway URL
 // 5. Add a Scriptable widget to your home screen
 // 6. Long-press the widget → Edit Widget → choose this script
 // 7. Set widget size to "Medium" for best results
@@ -18,23 +18,23 @@
 // ============================================================
 
 // ── Configuration ──────────────────────────────────────────
-const BASE_URL = "https://your-app.railway.app"; // ← Update this!
-const PERIOD_KEY = "spent_period";
-const DARK_BG = new Color("#1A1A2E");
-const ACCENT = new Color("#4ECDC4");
+const BASE_URL = 'https://indestructible-rosella-persons.ngrok-free.dev'; // ← Your ngrok URL
+const PERIOD_KEY = 'spent_period';
+const DARK_BG = new Color('#1A1A2E');
+const ACCENT = new Color('#4ECDC4');
 const WHITE = Color.white();
-const GRAY = new Color("#AAAAAA");
+const GRAY = new Color('#AAAAAA');
 
 // ── Category colors matching backend ───────────────────────
 const CATEGORY_COLORS = {
-  "Food & Drink": "#FF6B6B",
-  "Transport": "#4ECDC4",
-  "Entertainment": "#45B7D1",
-  "Shopping": "#96CEB4",
-  "Health": "#FFEAA7",
-  "Utilities": "#DDA0DD",
-  "Travel": "#F0A500",
-  "Other": "#B0BEC5",
+  'Food & Drink': '#FF6B6B',
+  Transport: '#4ECDC4',
+  Entertainment: '#45B7D1',
+  Shopping: '#96CEB4',
+  Health: '#FFEAA7',
+  Utilities: '#DDA0DD',
+  Travel: '#F0A500',
+  Other: '#B0BEC5',
 };
 
 // ── Period management ───────────────────────────────────────
@@ -42,11 +42,11 @@ function getSavedPeriod() {
   if (Keychain.contains(PERIOD_KEY)) {
     return Keychain.get(PERIOD_KEY);
   }
-  return "monthly";
+  return 'monthly';
 }
 
 function cyclePeriod(current) {
-  const periods = ["monthly", "weekly", "daily"];
+  const periods = ['monthly', 'weekly', 'daily'];
   const next = periods[(periods.indexOf(current) + 1) % periods.length];
   Keychain.set(PERIOD_KEY, next);
   return next;
@@ -60,10 +60,11 @@ function capitalize(str) {
 async function fetchSummary(period) {
   try {
     const req = new Request(`${BASE_URL}/api/v1/summary?period=${period}`);
+    req.headers = { 'ngrok-skip-browser-warning': 'true' };
     req.timeoutInterval = 10;
     return await req.loadJSON();
   } catch (e) {
-    console.error("fetchSummary failed: " + e.message);
+    console.error('fetchSummary failed: ' + e.message);
     return null;
   }
 }
@@ -71,10 +72,11 @@ async function fetchSummary(period) {
 async function fetchDonutChart(period) {
   try {
     const req = new Request(`${BASE_URL}/api/v1/charts/donut?period=${period}`);
+    req.headers = { 'ngrok-skip-browser-warning': 'true' };
     req.timeoutInterval = 15;
     return await req.loadImage();
   } catch (e) {
-    console.error("fetchDonutChart failed: " + e.message);
+    console.error('fetchDonutChart failed: ' + e.message);
     return null;
   }
 }
@@ -91,7 +93,7 @@ async function buildWidget(summary, chartImg, period) {
   headerStack.layoutHorizontally();
   headerStack.centerAlignContent();
 
-  const titleText = headerStack.addText("💸 Spent");
+  const titleText = headerStack.addText('💸 Spent');
   titleText.textColor = WHITE;
   titleText.font = Font.boldSystemFont(13);
 
@@ -110,11 +112,11 @@ async function buildWidget(summary, chartImg, period) {
     errStack.centerAlignContent();
 
     const errText = errStack.addText("⚠️ Can't connect");
-    errText.textColor = new Color("#FF6B6B");
+    errText.textColor = new Color('#FF6B6B');
     errText.font = Font.mediumSystemFont(12);
     errText.centerAlignText();
 
-    const hintText = errStack.addText("Check BASE_URL in script");
+    const hintText = errStack.addText('Check BASE_URL in script');
     hintText.textColor = GRAY;
     hintText.font = Font.systemFont(10);
     hintText.centerAlignText();
@@ -144,8 +146,7 @@ async function buildWidget(summary, chartImg, period) {
     totalLabel.font = Font.boldSystemFont(14);
     totalLabel.centerAlignText();
   } else {
-    // Placeholder if chart failed to load
-    const placeholder = contentStack.addText("📊");
+    const placeholder = contentStack.addText('📊');
     placeholder.font = Font.systemFont(40);
   }
 
@@ -165,15 +166,15 @@ async function buildWidget(summary, chartImg, period) {
     rowStack.centerAlignContent();
 
     // Color dot
-    const colorHex = CATEGORY_COLORS[item.category] || "#B0BEC5";
-    const dot = rowStack.addText("●");
+    const colorHex = CATEGORY_COLORS[item.category] || '#B0BEC5';
+    const dot = rowStack.addText('●');
     dot.textColor = new Color(colorHex);
     dot.font = Font.systemFont(8);
 
     rowStack.addSpacer(4);
 
     // Category name (truncated)
-    const shortName = item.category.split(" ")[0]; // "Food" from "Food & Drink"
+    const shortName = item.category.split(' ')[0];
     const nameText = rowStack.addText(shortName);
     nameText.textColor = GRAY;
     nameText.font = Font.systemFont(10);
@@ -189,7 +190,7 @@ async function buildWidget(summary, chartImg, period) {
   }
 
   if (breakdown.length === 0) {
-    const emptyText = breakdownStack.addText("No data yet");
+    const emptyText = breakdownStack.addText('No data yet');
     emptyText.textColor = GRAY;
     emptyText.font = Font.systemFont(11);
   }
@@ -198,7 +199,7 @@ async function buildWidget(summary, chartImg, period) {
 
   // Footer: last updated
   const now = new Date();
-  const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const footer = widget.addText(`Updated ${timeStr}`);
   footer.textColor = GRAY;
   footer.font = Font.systemFont(8);
@@ -210,34 +211,25 @@ async function buildWidget(summary, chartImg, period) {
 async function run() {
   const period = getSavedPeriod();
 
-  // If running in app (not widget), allow period cycling via table menu
   if (!config.runsInWidget) {
     const alert = new Alert();
-    alert.title = "💸 Spent Widget";
+    alert.title = '💸 Spent Widget';
     alert.message = `Current period: ${capitalize(period)}\nChange it below or tap Preview to see the widget.`;
-    alert.addAction("Switch to " + capitalize(cyclePeriod(period)));
-    alert.addAction("Preview Widget");
-    alert.addCancelAction("Cancel");
+    alert.addAction('Switch to ' + capitalize(cyclePeriod(period)));
+    alert.addAction('Preview Widget');
+    alert.addCancelAction('Cancel');
 
-    const choice = await alert.present();
-    if (choice === 0) {
-      // Already cycled in cyclePeriod above — just preview with new period
-    }
-    // Fall through to build widget for preview
+    await alert.present();
   }
 
   // Fetch data in parallel
-  const [summary, chartImg] = await Promise.all([
-    fetchSummary(period),
-    fetchDonutChart(period),
-  ]);
+  const [summary, chartImg] = await Promise.all([fetchSummary(period), fetchDonutChart(period)]);
 
   const widget = await buildWidget(summary, chartImg, period);
 
   if (config.runsInWidget) {
     Script.setWidget(widget);
   } else {
-    // Preview in app
     widget.presentMedium();
   }
 
