@@ -1,6 +1,9 @@
 """AI service for parsing transactions and generating insights using Claude."""
+
 import json
+
 import anthropic
+
 from app.config import settings
 
 CATEGORIES = [
@@ -14,14 +17,14 @@ CATEGORIES = [
     "Other",
 ]
 
-_client: anthropic.Anthropic | None = None
+_client: anthropic.AsyncAnthropic | None = None
 
 
-def get_client() -> anthropic.Anthropic:
+def get_client() -> anthropic.AsyncAnthropic:
     """Return a cached Anthropic client (lazy initialization)."""
     global _client
     if _client is None:
-        _client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        _client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     return _client
 
 
@@ -47,13 +50,18 @@ Do not use bullet points."""
 async def parse_transaction(raw_input: str) -> dict:
     """Parse a natural language spending message into structured data using Claude."""
     client = get_client()
-    message = client.messages.create(
+    message = await client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=256,
         system=PARSE_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": raw_input}],
     )
-    text = message.content[0].text.strip()
+    text = next(block.text for block in message.content if block.type == "text").strip()
+    if text.startswith("```"):
+        text = text.split("```", 2)[1]
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
     return json.loads(text)
 
 
@@ -67,14 +75,12 @@ async def generate_insights(breakdown: list[dict], days_remaining: int) -> str:
         f"- {item['category']}: ${item['total']:.2f} ({item['count']} transactions)"
         for item in breakdown
     )
-    user_message = (
-        f"Days remaining in period: {days_remaining}\n\nSpending breakdown:\n{breakdown_text}"
-    )
+    user_message = f"Days remaining in period: {days_remaining}\n\nSpending breakdown:\n{breakdown_text}"
 
-    message = client.messages.create(
+    message = await client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=256,
         system=INSIGHTS_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_message}],
     )
-    return message.content[0].text.strip()
+    return next(block.text for block in message.content if block.type == "text").strip()
