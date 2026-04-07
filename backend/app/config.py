@@ -10,6 +10,7 @@ Import the `settings` singleton anywhere in the app:
 Never hardcode secrets — always use settings.<field>.
 """
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,7 +35,19 @@ class Settings(BaseSettings):
     # ── Database ──────────────────────────────────────────────────────────────
     # asyncpg connection string, e.g.:
     #   postgresql+asyncpg://user:password@localhost:5432/spent
+    # Railway provides DATABASE_URL as postgres:// or postgresql:// — the
+    # validator below normalizes it to the asyncpg driver format automatically.
     database_url: str
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_db_url(cls, v: str) -> str:
+        """Normalize Railway's postgres:// URL to the asyncpg driver format."""
+        if v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql+asyncpg://", 1)
+        if v.startswith("postgresql://") and "+asyncpg" not in v:
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
 
     # ── Anthropic AI (Phase 3) ────────────────────────────────────────────────
     # Used by services/ai.py to call Claude for expense categorization.

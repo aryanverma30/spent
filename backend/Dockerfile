@@ -11,4 +11,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Default command — overridden by docker-compose.yml to add --reload in dev
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Shell form required so $PORT (injected by Railway) is expanded at runtime.
+# Falls back to 8000 for local use.
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
