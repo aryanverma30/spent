@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>💸 Spent</title>
+  <style>
+    /* ── Design tokens (matching widget palette exactly) ─────────────────── */
+    :root {
+      --bg-primary:    #1A1A2E;
+      --bg-card:       #16213E;
+      --bg-elevated:   #0F3460;
+      --accent:        #4ECDC4;
+      --accent-dim:    rgba(78, 205, 196, 0.15);
+      --accent-text:   #1A1A2E;
+      --text-primary:  #FFFFFF;
+      --text-secondary:#AAAAAA;
+      --text-muted:    #555575;
+      --danger:        #FF6B6B;
+      --radius-card:   16px;
+      --radius-pill:   100px;
+      --shadow-card:   0 4px 24px rgba(0,0,0,0.45);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .app {
+      max-width: 480px;
+      margin: 0 auto;
+      padding-bottom: 48px;
+    }
+
+    /* ── Header ──────────────────────────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 20px 0;
+    }
+    .header-title {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .header-subtitle {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+    .header-icon {
+      font-size: 28px;
+    }
+
+    /* ── Period tabs ─────────────────────────────────────────────────────── */
+    .period-tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--bg-card);
+      border-radius: var(--radius-pill);
+      padding: 4px;
+      margin: 16px 20px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 9px 0;
+      border: none;
+      border-radius: var(--radius-pill);
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      font-family: inherit;
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      color: var(--accent-text);
+      font-weight: 700;
+    }
+
+    /* ── Hero (total spent) ──────────────────────────────────────────────── */
+    .hero {
+      text-align: center;
+      padding: 8px 20px 24px;
+    }
+    .hero-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    .hero-amount {
+      font-size: 52px;
+      font-weight: 800;
+      letter-spacing: -2px;
+      line-height: 1;
+      color: var(--text-primary);
+    }
+    .hero-period {
+      font-size: 14px;
+      color: var(--accent);
+      margin-top: 6px;
+      font-weight: 500;
+    }
+
+    /* ── Cards ───────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border-radius: var(--radius-card);
+      padding: 18px;
+      margin: 0 20px 16px;
+      box-shadow: var(--shadow-card);
+    }
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 14px;
+    }
+
+    /* ── Charts row ──────────────────────────────────────────────────────── */
+    .charts-row {
+      display: flex;
+      gap: 12px;
+      margin: 0 20px 16px;
+    }
+    .chart-card {
+      flex: 1;
+      background: var(--bg-card);
+      border-radius: var(--radius-card);
+      padding: 14px;
+      box-shadow: var(--shadow-card);
+      min-height: 140px;
+      display: flex;
+      flex-direction: column;
+    }
+    .chart-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 10px;
+    }
+    .chart-card img {
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
+      display: block;
+    }
+    .chart-placeholder {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── Category breakdown ──────────────────────────────────────────────── */
+    .category-row {
+      margin-bottom: 14px;
+    }
+    .category-row:last-child { margin-bottom: 0; }
+    .category-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 7px;
+      gap: 8px;
+    }
+    .category-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .category-name {
+      flex: 1;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .category-meta {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-right: 6px;
+    }
+    .category-amount {
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .progress-track {
+      height: 5px;
+      background: var(--bg-elevated);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      width: 0;
+      transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ── Transactions ────────────────────────────────────────────────────── */
+    .tx-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--bg-elevated);
+    }
+    .tx-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .tx-row:first-child { padding-top: 0; }
+    .tx-icon {
+      font-size: 22px;
+      width: 36px;
+      height: 36px;
+      background: var(--bg-elevated);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .tx-details { flex: 1; min-width: 0; }
+    .tx-merchant {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tx-meta {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+    .tx-amount {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--danger);
+      flex-shrink: 0;
+    }
+
+    /* ── AI Insights ─────────────────────────────────────────────────────── */
+    .insights-card {
+      background: var(--accent-dim);
+      border: 1px solid rgba(78, 205, 196, 0.25);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .insights-icon {
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+    .insights-text {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text-primary);
+    }
+
+    /* ── Skeleton shimmer ────────────────────────────────────────────────── */
+    .skeleton {
+      background: linear-gradient(
+        90deg,
+        var(--bg-card) 25%,
+        var(--bg-elevated) 50%,
+        var(--bg-card) 75%
+      );
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 6px;
+      color: transparent !important;
+      user-select: none;
+    }
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* ── Error state ─────────────────────────────────────────────────────── */
+    .error-text {
+      color: var(--danger);
+      font-size: 13px;
+      text-align: center;
+      padding: 12px 0;
+    }
+
+    /* ── Empty state ─────────────────────────────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 13px;
+      padding: 16px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <div class="header-title">💸 Spent</div>
+        <div class="header-subtitle">Personal spending tracker</div>
+      </div>
+      <div class="header-icon">📊</div>
+    </div>
+
+    <!-- Period tabs -->
+    <nav class="period-tabs" role="tablist">
+      <button class="tab-btn" data-period="daily"   role="tab">Daily</button>
+      <button class="tab-btn" data-period="weekly"  role="tab">Weekly</button>
+      <button class="tab-btn active" data-period="monthly" role="tab">Monthly</button>
+    </nav>
+
+    <!-- Hero: total spent -->
+    <section class="hero">
+      <div class="hero-label">Total Spent</div>
+      <div class="hero-amount skeleton" id="total-amount">$0.00</div>
+      <div class="hero-period" id="period-label">This Month</div>
+    </section>
+
+    <!-- Charts row -->
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-label">By Category</div>
+        <div class="chart-placeholder" id="donut-placeholder">
+          <div class="skeleton" style="width:100%;height:100px;border-radius:8px;"></div>
+        </div>
+        <img id="donut-chart" src="" alt="Spending by category" style="display:none;" />
+      </div>
+      <div class="chart-card">
+        <div class="chart-label">Trend</div>
+        <div class="chart-placeholder" id="trend-placeholder">
+          <div class="skeleton" style="width:100%;height:100px;border-radius:8px;"></div>
+        </div>
+        <img id="trend-chart" src="" alt="Spending trend" style="display:none;" />
+      </div>
+    </div>
+
+    <!-- Category breakdown -->
+    <div class="card">
+      <div class="section-title">Categories</div>
+      <div id="breakdown-list">
+        <div class="skeleton" style="height:14px;margin-bottom:12px;"></div>
+        <div class="skeleton" style="height:14px;margin-bottom:12px;width:80%;"></div>
+        <div class="skeleton" style="height:14px;width:60%;"></div>
+      </div>
+    </div>
+
+    <!-- Recent transactions -->
+    <div class="card">
+      <div class="section-title">Recent Transactions</div>
+      <div id="transactions-list">
+        <div class="skeleton" style="height:40px;margin-bottom:10px;border-radius:10px;"></div>
+        <div class="skeleton" style="height:40px;margin-bottom:10px;border-radius:10px;"></div>
+        <div class="skeleton" style="height:40px;border-radius:10px;"></div>
+      </div>
+    </div>
+
+    <!-- AI Insights -->
+    <div class="card">
+      <div class="section-title">AI Insights <span style="color:var(--text-muted);font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;">(monthly)</span></div>
+      <div class="insights-card">
+        <div class="insights-icon">💡</div>
+        <div class="insights-text skeleton" id="insights-text" style="min-height:48px;">Loading...</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const BASE_URL = "{{ base_url }}";
+
+    const PERIOD_LABELS = {
+      daily:   'Today',
+      weekly:  'This Week',
+      monthly: 'This Month',
+    };
+
+    const CATEGORY_EMOJIS = {
+      'Food & Drink':  '🍔',
+      'Transport':     '🚗',
+      'Entertainment': '🎬',
+      'Shopping':      '🛍️',
+      'Health':        '💊',
+      'Utilities':     '💡',
+      'Travel':        '✈️',
+      'Other':         '📦',
+    };
+
+    let currentPeriod = 'monthly';
+
+    // ── API helpers ───────────────────────────────────────────────────────
+    async function apiFetch(path) {
+      const res = await fetch(BASE_URL + path);
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      return res.json();
+    }
+
+    // ── Renderers ─────────────────────────────────────────────────────────
+    function renderBreakdown(breakdown, totalSpent) {
+      if (!breakdown || breakdown.length === 0) {
+        return '<div class="empty-state">No transactions yet for this period.</div>';
+      }
+      return breakdown.map(item => {
+        const pct = totalSpent > 0 ? (item.total / totalSpent * 100).toFixed(1) : 0;
+        return `
+          <div class="category-row">
+            <div class="category-header">
+              <div class="category-dot" style="background:${item.color}"></div>
+              <span class="category-name">${item.category}</span>
+              <span class="category-meta">${item.count} txn${item.count !== 1 ? 's' : ''}</span>
+              <span class="category-amount">$${item.total.toFixed(2)}</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" data-width="${pct}" style="background:${item.color}"></div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    function animateProgressBars() {
+      // Trigger CSS transition by setting width after a brief delay
+      requestAnimationFrame(() => {
+        document.querySelectorAll('.progress-fill[data-width]').forEach(el => {
+          const w = el.getAttribute('data-width');
+          requestAnimationFrame(() => { el.style.width = w + '%'; });
+        });
+      });
+    }
+
+    function renderTransactions(transactions) {
+      if (!transactions || transactions.length === 0) {
+        return '<div class="empty-state">No transactions yet.</div>';
+      }
+      return transactions.map(t => {
+        const emoji = CATEGORY_EMOJIS[t.category] || '📦';
+        const date  = new Date(t.created_at).toLocaleDateString('en-US', {
+          month: 'short', day: 'numeric'
+        });
+        return `
+          <div class="tx-row">
+            <div class="tx-icon">${emoji}</div>
+            <div class="tx-details">
+              <div class="tx-merchant">${t.merchant}</div>
+              <div class="tx-meta">${t.category} · ${date}</div>
+            </div>
+            <div class="tx-amount">-$${parseFloat(t.amount).toFixed(2)}</div>
+          </div>`;
+      }).join('');
+    }
+
+    // ── Chart loading ─────────────────────────────────────────────────────
+    function loadCharts(period) {
+      const donutImg   = document.getElementById('donut-chart');
+      const trendImg   = document.getElementById('trend-chart');
+      const donutPh    = document.getElementById('donut-placeholder');
+      const trendPh    = document.getElementById('trend-placeholder');
+
+      // Reset to placeholder while loading
+      donutImg.style.display = 'none';
+      trendImg.style.display = 'none';
+      donutPh.style.display  = 'flex';
+      trendPh.style.display  = 'flex';
+
+      donutImg.onload = () => { donutPh.style.display = 'none'; donutImg.style.display = 'block'; };
+      trendImg.onload = () => { trendPh.style.display = 'none'; trendImg.style.display = 'block'; };
+      donutImg.onerror = () => { donutPh.innerHTML = '<div class="error-text">Chart unavailable</div>'; };
+      trendImg.onerror = () => { trendPh.innerHTML = '<div class="error-text">Chart unavailable</div>'; };
+
+      // Cache-bust is handled by browser since period changes the URL
+      donutImg.src = `${BASE_URL}/api/v1/charts/donut?period=${period}`;
+      trendImg.src = `${BASE_URL}/api/v1/charts/trend?period=${period}`;
+    }
+
+    // ── Main load ─────────────────────────────────────────────────────────
+    async function loadDashboard(period) {
+      currentPeriod = period;
+
+      // Update active tab
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.period === period);
+      });
+
+      // Update period label
+      document.getElementById('period-label').textContent = PERIOD_LABELS[period];
+
+      // Reset hero to skeleton
+      const amountEl = document.getElementById('total-amount');
+      amountEl.textContent = '$0.00';
+      amountEl.classList.add('skeleton');
+
+      // Load charts (async, independent)
+      loadCharts(period);
+
+      try {
+        const [summary, transactions] = await Promise.all([
+          apiFetch(`/api/v1/summary?period=${period}`),
+          apiFetch(`/api/v1/transactions?limit=10`),
+        ]);
+
+        // Hero
+        amountEl.classList.remove('skeleton');
+        amountEl.textContent = `$${summary.total_spent.toFixed(2)}`;
+
+        // Breakdown
+        document.getElementById('breakdown-list').innerHTML =
+          renderBreakdown(summary.breakdown, summary.total_spent);
+        animateProgressBars();
+
+        // Transactions
+        document.getElementById('transactions-list').innerHTML =
+          renderTransactions(transactions);
+
+      } catch (e) {
+        amountEl.classList.remove('skeleton');
+        amountEl.textContent = '—';
+        document.getElementById('breakdown-list').innerHTML =
+          `<div class="error-text">Failed to load data</div>`;
+        document.getElementById('transactions-list').innerHTML =
+          `<div class="error-text">Failed to load transactions</div>`;
+        console.error('Dashboard load failed:', e);
+      }
+    }
+
+    async function loadInsights() {
+      const el = document.getElementById('insights-text');
+      try {
+        const data = await apiFetch('/api/v1/insights');
+        el.classList.remove('skeleton');
+        el.textContent = data.summary;
+      } catch (e) {
+        el.classList.remove('skeleton');
+        el.textContent = 'Could not load insights.';
+        console.error('Insights load failed:', e);
+      }
+    }
+
+    // ── Event listeners ───────────────────────────────────────────────────
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => loadDashboard(btn.dataset.period));
+    });
+
+    // ── Init ──────────────────────────────────────────────────────────────
+    loadDashboard('monthly');
+    loadInsights();
+  </script>
+</body>
+</html>

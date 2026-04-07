@@ -88,7 +88,7 @@ async function buildWidget(summary, chartImg, period) {
   const widget = new ListWidget();
   widget.backgroundColor = DARK_BG;
   widget.setPadding(12, 14, 12, 14);
-  widget.url = `${BASE_URL}/api/v1/summary?period=${period}`;
+  widget.url = `${BASE_URL}/`;  // opens the spending dashboard in Safari
 
   // Header row: icon + title + period badge
   const headerStack = widget.addStack();

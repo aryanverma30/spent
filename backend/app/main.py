@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.services.db import engine
-from app.routes import transactions, summary, trends, insights, ai, charts
+from app.routes import transactions, summary, trends, insights, ai, charts, dashboard
 
 
 @asynccontextmanager
@@ -44,6 +44,9 @@ app.include_router(ai.router, prefix="/api/v1")
 
 # Charts (PNG images)
 app.include_router(charts.router, prefix="/api/v1")
+
+# Web dashboard — served at / (no prefix, tapping widget opens this)
+app.include_router(dashboard.router)
 
 
 @app.get("/health", tags=["health"])

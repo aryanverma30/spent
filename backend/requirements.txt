@@ -14,6 +14,9 @@ pydantic-settings==2.2.1    # reads settings from .env via BaseSettings
 # ─── Utilities ────────────────────────────────────────────────────────────────
 python-dotenv==1.0.1        # loads .env file into os.environ
 
+# ─── Templating ───────────────────────────────────────────────────────────────
+jinja2==3.1.4               # HTML template rendering for the web dashboard
+
 # ─── AI ───────────────────────────────────────────────────────────────────────
 anthropic>=0.40.0          # Anthropic Claude API client
 
