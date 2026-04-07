@@ -92,48 +92,62 @@ def generate_donut_chart(breakdown: list[dict]) -> bytes:
 
 
 def generate_trend_chart(buckets: list[dict]) -> bytes:
-    """Generate a horizontal bar chart PNG from spending trend buckets.
+    """Generate a vertical bar chart PNG from spending trend buckets.
 
     Each bucket must have 'label' (str) and 'total' (float) keys.
     Returns raw PNG bytes suitable for streaming as image/png.
+
+    Uses a fixed 600×320 px canvas so the chart is always readable even
+    with only 1-2 data points.  Dark background (#1A1A2E) with high-contrast
+    teal (#4ECDC4) bars.
     """
-    fig, ax = plt.subplots(figsize=(5, max(3, len(buckets) * 0.4 + 1)), dpi=150)
-    fig.patch.set_facecolor("#1A1A2E")
-    ax.set_facecolor("#1A1A2E")
+    BG = "#1A1A2E"
+    BAR_COLOR = "#4ECDC4"
+    TEXT_COLOR = "#FFFFFF"
+    LABEL_COLOR = "#AAAAAA"
+
+    fig, ax = plt.subplots(figsize=(6, 3.2), dpi=100)
+    fig.patch.set_facecolor(BG)
+    ax.set_facecolor(BG)
 
     if not buckets:
         ax.text(
             0.5, 0.5, "No data",
             ha="center", va="center",
             transform=ax.transAxes,
-            color="white", fontsize=12,
+            color=TEXT_COLOR, fontsize=12,
         )
         ax.axis("off")
     else:
-        labels = [b["label"] for b in buckets]
-        values = [float(b["total"]) for b in buckets]
-        y_pos = list(range(len(labels)))
+        # Keep the most recent 10 buckets so labels don't crowd
+        display = buckets[-10:]
+        labels = [b["label"] for b in display]
+        values = [float(b["total"]) for b in display]
+        x_pos = list(range(len(labels)))
 
-        bars = ax.barh(y_pos, values, color="#4ECDC4", edgecolor="none")
-        ax.set_yticks(y_pos)
-        ax.set_yticklabels(labels, color="white", fontsize=8)
-        ax.tick_params(colors="white", length=0)
-        ax.spines[:].set_visible(False)
-        ax.xaxis.set_visible(False)
+        bars = ax.bar(x_pos, values, color=BAR_COLOR, edgecolor="none", width=0.6)
 
+        # Value labels above each bar
         max_val = max(values) if values else 1.0
         for bar, val in zip(bars, values):
             ax.text(
-                bar.get_width() + max_val * 0.02,
-                bar.get_y() + bar.get_height() / 2,
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + max_val * 0.02,
                 f"${val:.0f}",
-                va="center", color="white", fontsize=7,
+                ha="center", va="bottom",
+                color=TEXT_COLOR, fontsize=7, fontweight="bold",
             )
 
-    plt.tight_layout()
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels(labels, color=LABEL_COLOR, fontsize=7, rotation=30, ha="right")
+        ax.tick_params(axis="both", colors=LABEL_COLOR, length=0)
+        ax.set_ylim(0, max_val * 1.25)   # headroom for value labels
+        ax.yaxis.set_visible(False)
+        ax.spines[:].set_visible(False)
+
+    fig.subplots_adjust(bottom=0.25, top=0.92, left=0.04, right=0.98)
     buf = io.BytesIO()
-    plt.savefig(buf, format="png", bbox_inches="tight",
-                facecolor="#1A1A2E", edgecolor="none")
+    fig.savefig(buf, format="png", facecolor=BG, edgecolor="none")
     plt.close(fig)
     buf.seek(0)
     return buf.read()
