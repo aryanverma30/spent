@@ -141,7 +141,7 @@ async function buildWidget(summary, chartImg, period) {
 
     imgStack.addSpacer(4);
 
-    const totalLabel = imgStack.addText(`$${summary.total_spent.toFixed(2)}`);
+    const totalLabel = imgStack.addText(`$${(+(summary.total_spent || 0)).toFixed(2)}`);
     totalLabel.textColor = WHITE;
     totalLabel.font = Font.boldSystemFont(14);
     totalLabel.centerAlignText();

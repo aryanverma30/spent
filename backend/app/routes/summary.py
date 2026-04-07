@@ -41,7 +41,8 @@ async def get_summary(
         for row in rows
     ]
 
-    total_spent = sum(item["total"] for item in breakdown)
+    # Ensure total_spent is always a plain float (never Decimal) for JSON serialization
+    total_spent = float(sum(item["total"] for item in breakdown))
 
     return {
         "period": period,
