@@ -21,8 +21,17 @@ _client: anthropic.AsyncAnthropic | None = None
 
 
 def get_client() -> anthropic.AsyncAnthropic:
-    """Return a cached Anthropic client (lazy initialization)."""
+    """Return a cached Anthropic async client (lazy initialization).
+
+    Raises RuntimeError if ANTHROPIC_API_KEY is not configured so callers
+    can catch it and return a graceful response instead of a 500.
+    """
     global _client
+    if not settings.anthropic_api_key:
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY is not set. "
+            "Add it to your .env file or Railway environment variables."
+        )
     if _client is None:
         _client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     return _client
@@ -48,7 +57,11 @@ Do not use bullet points."""
 
 
 async def parse_transaction(raw_input: str) -> dict:
-    """Parse a natural language spending message into structured data using Claude."""
+    """Parse a natural language spending message into structured data using Claude.
+
+    Raises RuntimeError (from get_client) if API key is not set, or any
+    anthropic exception on API failure — callers must handle both.
+    """
     client = get_client()
     message = await client.messages.create(
         model="claude-haiku-4-5-20251001",
@@ -66,10 +79,18 @@ async def parse_transaction(raw_input: str) -> dict:
 
 
 async def generate_insights(breakdown: list[dict], days_remaining: int) -> str:
-    """Generate a 2-3 sentence spending summary using Claude."""
-    client = get_client()
+    """Generate a 2-3 sentence spending summary using Claude.
+
+    Returns a plain string.  Falls back to a friendly placeholder if the
+    Anthropic API key is missing or the API call fails — never raises.
+    """
     if not breakdown:
         return "No spending recorded yet this period. Start logging expenses to see insights!"
+
+    try:
+        client = get_client()
+    except RuntimeError as e:
+        return f"AI insights unavailable: {e}"
 
     breakdown_text = "\n".join(
         f"- {item['category']}: ${item['total']:.2f} ({item['count']} transactions)"
@@ -77,10 +98,13 @@ async def generate_insights(breakdown: list[dict], days_remaining: int) -> str:
     )
     user_message = f"Days remaining in period: {days_remaining}\n\nSpending breakdown:\n{breakdown_text}"
 
-    message = await client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=256,
-        system=INSIGHTS_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_message}],
-    )
-    return next(block.text for block in message.content if block.type == "text").strip()
+    try:
+        message = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=256,
+            system=INSIGHTS_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        return next(block.text for block in message.content if block.type == "text").strip()
+    except Exception as e:
+        return f"Could not generate insights right now ({type(e).__name__}). Try again later."

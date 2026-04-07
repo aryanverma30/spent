@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.services.db import engine
-from app.routes import transactions, summary, trends, insights, ai, charts, dashboard
+from app.routes import transactions, summary, trends, insights, ai, charts, categories, dashboard
 
 
 @asynccontextmanager
@@ -38,6 +38,7 @@ app.include_router(transactions.router, prefix="/api/v1")
 app.include_router(summary.router, prefix="/api/v1")
 app.include_router(trends.router, prefix="/api/v1")
 app.include_router(insights.router, prefix="/api/v1")
+app.include_router(categories.router, prefix="/api/v1")
 
 # AI parsing
 app.include_router(ai.router, prefix="/api/v1")

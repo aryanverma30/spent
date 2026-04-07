@@ -25,7 +25,7 @@ async def get_summary(
             func.count(Transaction.id).label("count"),
         )
         .where(Transaction.created_at >= start)
-        .where(Transaction.created_at < end)
+        .where(Transaction.created_at <= end)
         .group_by(Transaction.category)
         .order_by(func.sum(Transaction.amount).desc())
     )
@@ -41,7 +41,8 @@ async def get_summary(
         for row in rows
     ]
 
-    total_spent = sum(item["total"] for item in breakdown)
+    # Ensure total_spent is always a plain float (never Decimal) for JSON serialization
+    total_spent = float(sum(item["total"] for item in breakdown))
 
     return {
         "period": period,

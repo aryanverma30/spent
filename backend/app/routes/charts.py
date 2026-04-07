@@ -30,7 +30,7 @@ async def donut_chart(
             func.sum(Transaction.amount).label("total"),
         )
         .where(Transaction.created_at >= start)
-        .where(Transaction.created_at < end)
+        .where(Transaction.created_at <= end)
         .group_by(Transaction.category)
     )
     rows = result.all()
