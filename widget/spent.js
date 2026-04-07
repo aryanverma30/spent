@@ -12,9 +12,10 @@
 // 7. Set widget size to "Medium" for best results
 //
 // PERIOD PREFERENCE:
-// To change the period, run this script in the Scriptable app and
-// tap the period button in the preview. It saves to Keychain.
-// Allowed values: "monthly", "weekly", "daily"
+// Option 1 (recommended): Long-press the widget → Edit Widget → Parameter
+//   Type "daily", "weekly", or "monthly". Each widget can show a different period.
+// Option 2: Run this script in Scriptable and tap the switch button to cycle
+//   the period. Saves to Keychain as a fallback when no parameter is set.
 // ============================================================
 
 // ── Configuration ──────────────────────────────────────────
@@ -39,9 +40,10 @@ const CATEGORY_COLORS = {
 
 // ── Period management ───────────────────────────────────────
 function getSavedPeriod() {
-  if (Keychain.contains(PERIOD_KEY)) {
-    return Keychain.get(PERIOD_KEY);
-  }
+  const VALID = ['daily', 'weekly', 'monthly'];
+  const param = (args.widgetParameter || '').trim().toLowerCase();
+  if (VALID.includes(param)) return param;
+  if (Keychain.contains(PERIOD_KEY)) return Keychain.get(PERIOD_KEY);
   return 'monthly';
 }
 
