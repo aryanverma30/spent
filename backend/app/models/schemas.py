@@ -5,6 +5,13 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class TransactionPatch(BaseModel):
+    """Schema for partially updating a transaction (PATCH)."""
+
+    category: Optional[str] = Field(None, max_length=50)
+    note: Optional[str] = None
+
+
 class TransactionCreate(BaseModel):
     """Schema for creating a new transaction."""
 
