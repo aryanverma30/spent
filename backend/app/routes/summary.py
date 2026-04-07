@@ -25,7 +25,7 @@ async def get_summary(
             func.count(Transaction.id).label("count"),
         )
         .where(Transaction.created_at >= start)
-        .where(Transaction.created_at < end)
+        .where(Transaction.created_at <= end)
         .group_by(Transaction.category)
         .order_by(func.sum(Transaction.amount).desc())
     )

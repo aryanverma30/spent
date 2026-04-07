@@ -19,18 +19,30 @@ CATEGORY_COLORS: dict[str, str] = {
 
 
 def get_period_bounds(period: str) -> tuple[datetime, datetime]:
-    """Return (start, end) UTC datetimes for daily/weekly/monthly periods."""
+    """Return (start, end) UTC datetimes for daily/weekly/monthly periods.
+
+    - daily:   from midnight UTC today to now
+    - weekly:  from Monday 00:00 UTC of the current ISO week to now
+    - monthly: from 00:00 UTC on the 1st of the current calendar month to now
+
+    end is bumped by 1 second so that a transaction inserted at the exact
+    moment the query is built is never excluded by a strict < comparison.
+    """
     now = datetime.now(timezone.utc)
+    end = now + timedelta(seconds=1)   # inclusive upper bound
+
     if period == "daily":
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     elif period == "weekly":
+        # weekday() is 0=Monday … 6=Sunday, so this always gives Monday 00:00
         days_since_monday = now.weekday()
         start = (now - timedelta(days=days_since_monday)).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
     else:  # monthly
         start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    return start, now
+
+    return start, end
 
 
 def generate_donut_chart(breakdown: list[dict]) -> bytes:
