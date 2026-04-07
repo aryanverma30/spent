@@ -218,7 +218,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         emoji = CATEGORY_EMOJIS.get(category, "📦")
         text = (
-            f"✅ *Logged!*\n\n"
+            f"✅ *Logged!* Widget will refresh shortly ✓\n\n"
             f"🏦 Merchant:  {merchant}\n"
             f"💰 Amount:   ${float(amount):.2f}\n"
             f"{emoji} Category: {category}"

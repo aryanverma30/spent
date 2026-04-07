@@ -21,6 +21,8 @@
 // ── Configuration ──────────────────────────────────────────
 const BASE_URL = 'https://spent-production.up.railway.app'; // ← Railway URL
 const PERIOD_KEY = 'spent_period';
+const LAST_FETCH_KEY = 'spent_last_fetch';
+const REFRESH_INTERVAL_S = 60; // re-fetch if data is older than this many seconds
 const DARK_BG = new Color('#1A1A2E');
 const ACCENT = new Color('#4ECDC4');
 const WHITE = Color.white();
@@ -207,6 +209,18 @@ async function buildWidget(summary, chartImg, period) {
   return widget;
 }
 
+// ── Refresh helpers ─────────────────────────────────────────
+function shouldRefetch() {
+  if (!Keychain.contains(LAST_FETCH_KEY)) return true;
+  const lastFetch = parseInt(Keychain.get(LAST_FETCH_KEY), 10);
+  const ageSeconds = (Date.now() - lastFetch) / 1000;
+  return ageSeconds >= REFRESH_INTERVAL_S;
+}
+
+function markFetched() {
+  Keychain.set(LAST_FETCH_KEY, String(Date.now()));
+}
+
 // ── Main ────────────────────────────────────────────────────
 async function run() {
   const period = getSavedPeriod();
@@ -222,10 +236,22 @@ async function run() {
     await alert.present();
   }
 
-  // Fetch data in parallel
-  const [summary, chartImg] = await Promise.all([fetchSummary(period), fetchDonutChart(period)]);
+  // Always fetch fresh data if the last fetch was more than REFRESH_INTERVAL_S ago
+  let summary, chartImg;
+  if (shouldRefetch()) {
+    [summary, chartImg] = await Promise.all([fetchSummary(period), fetchDonutChart(period)]);
+    if (summary) markFetched(); // only stamp if we got good data
+  } else {
+    [summary, chartImg] = await Promise.all([fetchSummary(period), fetchDonutChart(period)]);
+    markFetched();
+  }
 
   const widget = await buildWidget(summary, chartImg, period);
+
+  // Ask Scriptable to re-run this script in ~1 minute so the widget
+  // reflects new transactions quickly without waiting for iOS to schedule it.
+  const nextRefresh = new Date(Date.now() + REFRESH_INTERVAL_S * 1000);
+  widget.refreshAfterDate = nextRefresh;
 
   if (config.runsInWidget) {
     Script.setWidget(widget);
