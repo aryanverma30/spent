@@ -19,7 +19,7 @@
 // ============================================================
 
 // ── Configuration ──────────────────────────────────────────
-const BASE_URL = 'https://indestructible-rosella-persons.ngrok-free.dev'; // ← Your ngrok URL
+const BASE_URL = 'https://spent-production.up.railway.app'; // ← Railway URL
 const PERIOD_KEY = 'spent_period';
 const DARK_BG = new Color('#1A1A2E');
 const ACCENT = new Color('#4ECDC4');
@@ -62,7 +62,6 @@ function capitalize(str) {
 async function fetchSummary(period) {
   try {
     const req = new Request(`${BASE_URL}/api/v1/summary?period=${period}`);
-    req.headers = { 'ngrok-skip-browser-warning': 'true' };
     req.timeoutInterval = 10;
     return await req.loadJSON();
   } catch (e) {
@@ -74,7 +73,6 @@ async function fetchSummary(period) {
 async function fetchDonutChart(period) {
   try {
     const req = new Request(`${BASE_URL}/api/v1/charts/donut?period=${period}`);
-    req.headers = { 'ngrok-skip-browser-warning': 'true' };
     req.timeoutInterval = 15;
     return await req.loadImage();
   } catch (e) {
