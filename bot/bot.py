@@ -86,6 +86,18 @@ async def api_delete(path: str) -> bool:
             return False
 
 
+async def api_patch(path: str, data: dict) -> Optional[dict]:
+    """PATCH to the backend API and return the JSON response, or None on error."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            resp = await client.patch(f"{BACKEND_URL}/api/v1{path}", json=data)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            logger.error(f"API PATCH {path} failed: {e}")
+            return None
+
+
 # ---------------------------------------------------------------------------
 # Command Handlers
 # ---------------------------------------------------------------------------
@@ -224,7 +236,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             f"{emoji} Category: {category}"
         )
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("↩️ Undo", callback_data=f"delete:{saved['id']}")]
+            [
+                InlineKeyboardButton(
+                    "🏷 Change Category",
+                    callback_data=f"change_cat_saved:{saved['id']}",
+                ),
+                InlineKeyboardButton("↩️ Undo", callback_data=f"delete:{saved['id']}"),
+            ]
         ])
         await update.message.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
 
@@ -293,6 +311,42 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             context.user_data.pop("pending", None)
         else:
             await query.edit_message_text("❌ Failed to save. Try again.")
+
+    # Show category picker for an ALREADY SAVED transaction (change_cat_saved:{id})
+    elif data.startswith("change_cat_saved:"):
+        transaction_id = data.split(":", 1)[1]
+        buttons = []
+        row = []
+        for i, cat in enumerate(CATEGORIES):
+            emoji = CATEGORY_EMOJIS.get(cat, "📦")
+            row.append(
+                InlineKeyboardButton(
+                    f"{emoji} {cat}",
+                    callback_data=f"patch_cat:{transaction_id}:{cat}",
+                )
+            )
+            if len(row) == 2:
+                buttons.append(row)
+                row = []
+        if row:
+            buttons.append(row)
+        await query.edit_message_text(
+            "Choose a new category:",
+            reply_markup=InlineKeyboardMarkup(buttons),
+        )
+
+    # Apply a category update to an already-saved transaction via PATCH
+    elif data.startswith("patch_cat:"):
+        _, transaction_id, new_category = data.split(":", 2)
+        updated = await api_patch(f"/transactions/{transaction_id}", {"category": new_category})
+        if updated:
+            emoji = CATEGORY_EMOJIS.get(new_category, "📦")
+            await query.edit_message_text(
+                f"✓ Updated to {emoji} *{new_category}*",
+                parse_mode="Markdown",
+            )
+        else:
+            await query.edit_message_text("❌ Could not update category. Try again.")
 
     # Show category picker
     elif data == "change_category":
