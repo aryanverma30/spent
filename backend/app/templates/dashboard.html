@@ -435,22 +435,23 @@
     }
 
     function renderTransactions(transactions) {
-      if (!transactions || transactions.length === 0) {
+      if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
         return '<div class="empty-state">No transactions yet.</div>';
       }
       return transactions.map(t => {
-        const emoji = CATEGORY_EMOJIS[t.category] || '📦';
-        const date  = new Date(t.created_at).toLocaleDateString('en-US', {
-          month: 'short', day: 'numeric'
-        });
+        const emoji  = CATEGORY_EMOJIS[t.category] || '📦';
+        const amount = isNaN(parseFloat(t.amount)) ? '0.00' : parseFloat(t.amount).toFixed(2);
+        const date   = t.created_at
+          ? new Date(t.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          : '—';
         return `
           <div class="tx-row">
             <div class="tx-icon">${emoji}</div>
             <div class="tx-details">
-              <div class="tx-merchant">${t.merchant}</div>
-              <div class="tx-meta">${t.category} · ${date}</div>
+              <div class="tx-merchant">${t.merchant || 'Unknown'}</div>
+              <div class="tx-meta">${t.category || 'Other'} · ${date}</div>
             </div>
-            <div class="tx-amount">-$${parseFloat(t.amount).toFixed(2)}</div>
+            <div class="tx-amount">-$${amount}</div>
           </div>`;
       }).join('');
     }
