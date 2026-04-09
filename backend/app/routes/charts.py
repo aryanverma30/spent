@@ -7,11 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.transaction import Transaction
 from app.services.charts import (
     generate_donut_chart,
-    generate_trend_chart,
     get_period_bounds,
 )
 from app.services.db import get_session
-from app.routes.trends import get_trend_buckets
 
 router = APIRouter(prefix="/charts", tags=["charts"])
 
@@ -41,15 +39,4 @@ async def donut_chart(
     ]
 
     png_bytes = generate_donut_chart(breakdown)
-    return Response(content=png_bytes, media_type="image/png")
-
-
-@router.get("/trend")
-async def trend_chart(
-    period: Literal["monthly", "weekly", "daily"] = Query(default="monthly"),
-    session: AsyncSession = Depends(get_session),
-) -> Response:
-    """Return a PNG horizontal bar chart of spending trends for the given period."""
-    buckets = await get_trend_buckets(period, session)
-    png_bytes = generate_trend_chart(buckets)
     return Response(content=png_bytes, media_type="image/png")
