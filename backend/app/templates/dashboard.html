@@ -374,8 +374,6 @@
   </div>
 
   <script>
-    const BASE_URL = "{{ base_url }}";
-
     const PERIOD_LABELS = {
       daily:   'Today',
       weekly:  'This Week',
@@ -397,7 +395,9 @@
 
     // ── API helpers ───────────────────────────────────────────────────────
     async function apiFetch(path) {
-      const res = await fetch(BASE_URL + path);
+      // Use a relative URL so the request always matches the page's scheme
+      // (avoids mixed-content blocks when Railway proxies http→https).
+      const res = await fetch(path);
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       return res.json();
     }
@@ -467,7 +467,7 @@
       donutImg.onload  = () => { donutPh.style.display = 'none'; donutImg.style.display = 'block'; };
       donutImg.onerror = () => { donutPh.innerHTML = '<div class="error-text">Chart unavailable</div>'; };
 
-      donutImg.src = `${BASE_URL}/api/v1/charts/donut?period=${period}`;
+      donutImg.src = `/api/v1/charts/donut?period=${period}`;
     }
 
     // ── Main load ─────────────────────────────────────────────────────────

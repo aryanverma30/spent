@@ -15,8 +15,5 @@ async def dashboard(request: Request) -> HTMLResponse:
     """Serve the main spending dashboard page."""
     return templates.TemplateResponse(
         "dashboard.html",
-        {
-            "request": request,
-            "base_url": str(request.base_url).rstrip("/"),
-        },
+        {"request": request},
     )
