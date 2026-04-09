@@ -340,13 +340,6 @@
         </div>
         <img id="donut-chart" src="" alt="Spending by category" style="display:none;" />
       </div>
-      <div class="chart-card">
-        <div class="chart-label">Trend</div>
-        <div class="chart-placeholder" id="trend-placeholder">
-          <div class="skeleton" style="width:100%;height:100px;border-radius:8px;"></div>
-        </div>
-        <img id="trend-chart" src="" alt="Spending trend" style="display:none;" />
-      </div>
     </div>
 
     <!-- Category breakdown -->
@@ -464,25 +457,16 @@
 
     // ── Chart loading ─────────────────────────────────────────────────────
     function loadCharts(period) {
-      const donutImg   = document.getElementById('donut-chart');
-      const trendImg   = document.getElementById('trend-chart');
-      const donutPh    = document.getElementById('donut-placeholder');
-      const trendPh    = document.getElementById('trend-placeholder');
+      const donutImg = document.getElementById('donut-chart');
+      const donutPh  = document.getElementById('donut-placeholder');
 
-      // Reset to placeholder while loading
       donutImg.style.display = 'none';
-      trendImg.style.display = 'none';
       donutPh.style.display  = 'flex';
-      trendPh.style.display  = 'flex';
 
-      donutImg.onload = () => { donutPh.style.display = 'none'; donutImg.style.display = 'block'; };
-      trendImg.onload = () => { trendPh.style.display = 'none'; trendImg.style.display = 'block'; };
+      donutImg.onload  = () => { donutPh.style.display = 'none'; donutImg.style.display = 'block'; };
       donutImg.onerror = () => { donutPh.innerHTML = '<div class="error-text">Chart unavailable</div>'; };
-      trendImg.onerror = () => { trendPh.innerHTML = '<div class="error-text">Chart unavailable</div>'; };
 
-      // Cache-bust is handled by browser since period changes the URL
       donutImg.src = `${BASE_URL}/api/v1/charts/donut?period=${period}`;
-      trendImg.src = `${BASE_URL}/api/v1/charts/trend?period=${period}`;
     }
 
     // ── Main load ─────────────────────────────────────────────────────────
@@ -505,33 +489,31 @@
       // Load charts (async, independent)
       loadCharts(period);
 
+      // Load summary + categories independently from transactions so one
+      // failure does not blank out the other section.
       try {
-        const [summary, transactions] = await Promise.all([
-          apiFetch(`/api/v1/summary?period=${period}`),
-          apiFetch(`/api/v1/transactions?limit=10`),
-        ]);
-
-        // Hero
+        const summary = await apiFetch(`/api/v1/summary?period=${period}`);
         amountEl.classList.remove('skeleton');
         amountEl.textContent = `$${summary.total_spent.toFixed(2)}`;
-
-        // Breakdown
         document.getElementById('breakdown-list').innerHTML =
           renderBreakdown(summary.breakdown, summary.total_spent);
         animateProgressBars();
-
-        // Transactions
-        document.getElementById('transactions-list').innerHTML =
-          renderTransactions(transactions);
-
       } catch (e) {
         amountEl.classList.remove('skeleton');
         amountEl.textContent = '—';
         document.getElementById('breakdown-list').innerHTML =
-          `<div class="error-text">Failed to load data</div>`;
+          `<div class="error-text">Failed to load categories</div>`;
+        console.error('Summary load failed:', e);
+      }
+
+      try {
+        const transactions = await apiFetch(`/api/v1/transactions?limit=10`);
+        document.getElementById('transactions-list').innerHTML =
+          renderTransactions(transactions);
+      } catch (e) {
         document.getElementById('transactions-list').innerHTML =
           `<div class="error-text">Failed to load transactions</div>`;
-        console.error('Dashboard load failed:', e);
+        console.error('Transactions load failed:', e);
       }
     }
 
