@@ -34,8 +34,9 @@ def get_period_bounds(period: str) -> tuple[datetime, datetime]:
     if period == "daily":
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     elif period == "weekly":
-        # weekday() is 0=Monday … 6=Sunday, so this always gives Monday 00:00
-        days_since_monday = now.weekday()
+        # weekday() returns 0=Monday … 6=Sunday — subtracting it always
+        # lands on the Monday that started the current ISO week.
+        days_since_monday = now.weekday()  # 0 on Monday, 6 on Sunday
         start = (now - timedelta(days=days_since_monday)).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
@@ -89,5 +90,3 @@ def generate_donut_chart(breakdown: list[dict]) -> bytes:
     plt.close(fig)
     buf.seek(0)
     return buf.read()
-
-
