@@ -14,6 +14,7 @@ CATEGORY_COLORS: dict[str, str] = {
     "Health": "#FFEAA7",
     "Utilities": "#DDA0DD",
     "Travel": "#F0A500",
+    "Pets": "#F8C8D4",
     "Other": "#B0BEC5",
 }
 

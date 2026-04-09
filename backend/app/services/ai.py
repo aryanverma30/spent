@@ -14,6 +14,7 @@ CATEGORIES = [
     "Health",
     "Utilities",
     "Travel",
+    "Pets",
     "Other",
 ]
 
@@ -42,7 +43,7 @@ and return ONLY valid JSON with this exact schema:
 { "amount": float, "merchant": string, "category": string, "confidence": float }
 
 Allowed categories (use EXACTLY one of these strings):
-Food & Drink, Transport, Entertainment, Shopping, Health, Utilities, Travel, Other
+Food & Drink, Transport, Entertainment, Shopping, Health, Utilities, Travel, Pets, Other
 
 Rules:
 - amount must be a positive float (strip $ signs)

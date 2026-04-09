@@ -36,6 +36,7 @@ CATEGORIES = [
     "Health",
     "Utilities",
     "Travel",
+    "Pets",
     "Other",
 ]
 
@@ -47,6 +48,7 @@ CATEGORY_EMOJIS = {
     "Health": "💊",
     "Utilities": "💡",
     "Travel": "✈️",
+    "Pets": "🐾",
     "Other": "📦",
 }
 
