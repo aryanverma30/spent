@@ -69,7 +69,7 @@ def generate_donut_chart(breakdown: list[dict]) -> bytes:
         values = [float(item["total"]) for item in breakdown]
         colors = [CATEGORY_COLORS.get(cat, "#B0BEC5") for cat in labels]
 
-        ax.pie(
+        wedges, _ = ax.pie(
             values,
             labels=None,
             colors=colors,
@@ -83,6 +83,23 @@ def generate_donut_chart(breakdown: list[dict]) -> bytes:
             ha="center", va="center",
             fontsize=14, fontweight="bold", color="white",
         )
+
+        # Legend: coloured dot + short category name, bottom-right
+        legend = ax.legend(
+            wedges,
+            labels,
+            loc="lower right",
+            bbox_to_anchor=(1.35, -0.15),
+            fontsize=6,
+            frameon=False,
+            labelcolor="white",
+            handlelength=0.8,
+            handleheight=0.8,
+            borderpad=0.3,
+            labelspacing=0.4,
+        )
+        for handle in legend.legend_handles:
+            handle.set_linewidth(0)
 
     plt.tight_layout()
     buf = io.BytesIO()
