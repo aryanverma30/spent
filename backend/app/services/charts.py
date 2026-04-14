@@ -1,6 +1,7 @@
 """Chart generation (Matplotlib headless) and period utility functions."""
 import io
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import matplotlib
 matplotlib.use("Agg")  # Must be called before importing pyplot — headless rendering
@@ -9,10 +10,13 @@ import matplotlib.pyplot as plt
 from app.constants import CATEGORY_COLORS
 
 
+_CHICAGO = ZoneInfo("America/Chicago")
+
+
 def get_period_bounds(period: str) -> tuple[datetime, datetime]:
     """Return (start, end) UTC datetimes for daily/weekly/monthly periods.
 
-    - daily:   from midnight UTC today to now
+    - daily:   midnight-to-midnight in America/Chicago (CST/CDT)
     - weekly:  from Monday 00:00 UTC of the current ISO week to now
     - monthly: from 00:00 UTC on the 1st of the current calendar month to now
 
@@ -23,7 +27,10 @@ def get_period_bounds(period: str) -> tuple[datetime, datetime]:
     end = now + timedelta(seconds=1)   # inclusive upper bound
 
     if period == "daily":
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        # Compute local midnight in America/Chicago, then convert back to UTC
+        now_local = now.astimezone(_CHICAGO)
+        local_midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        start = local_midnight.astimezone(timezone.utc)
     elif period == "weekly":
         # weekday() returns 0=Monday … 6=Sunday — subtracting it always
         # lands on the Monday that started the current ISO week.
