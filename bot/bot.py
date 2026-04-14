@@ -28,17 +28,7 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8000")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 AI_CONFIDENCE_THRESHOLD = float(os.getenv("AI_CONFIDENCE_THRESHOLD", "0.75"))
 
-CATEGORIES = [
-    "Food & Drink",
-    "Transport",
-    "Entertainment",
-    "Shopping",
-    "Health",
-    "Utilities",
-    "Travel",
-    "Pets",
-    "Other",
-]
+from constants import CATEGORIES  # noqa: E402 — mirrors backend/app/constants.py
 
 CATEGORY_EMOJIS = {
     "Food & Drink": "🍔",

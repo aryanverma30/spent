@@ -1,26 +1,18 @@
 """AI insights endpoint — generates a spending summary for the current month."""
 import calendar
+import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.constants import CATEGORY_COLORS
 from app.models.transaction import Transaction
 from app.services.ai import generate_insights
 from app.services.db import get_session
 
-router = APIRouter(prefix="/insights", tags=["insights"])
+logger = logging.getLogger(__name__)
 
-CATEGORY_COLORS: dict[str, str] = {
-    "Food & Drink": "#FF6B6B",
-    "Transport": "#4ECDC4",
-    "Entertainment": "#45B7D1",
-    "Shopping": "#96CEB4",
-    "Health": "#FFEAA7",
-    "Utilities": "#DDA0DD",
-    "Travel": "#F0A500",
-    "Pets": "#F8C8D4",
-    "Other": "#B0BEC5",
-}
+router = APIRouter(prefix="/insights", tags=["insights"])
 
 
 @router.get("")

@@ -1,22 +1,14 @@
 """AI service for parsing transactions and generating insights using Claude."""
 
 import json
+import logging
 
 import anthropic
 
 from app.config import settings
+from app.constants import CATEGORIES
 
-CATEGORIES = [
-    "Food & Drink",
-    "Transport",
-    "Entertainment",
-    "Shopping",
-    "Health",
-    "Utilities",
-    "Travel",
-    "Pets",
-    "Other",
-]
+logger = logging.getLogger(__name__)
 
 _client: anthropic.AsyncAnthropic | None = None
 

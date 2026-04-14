@@ -6,17 +6,7 @@ import matplotlib
 matplotlib.use("Agg")  # Must be called before importing pyplot — headless rendering
 import matplotlib.pyplot as plt
 
-CATEGORY_COLORS: dict[str, str] = {
-    "Food & Drink": "#FF6B6B",
-    "Transport": "#4ECDC4",
-    "Entertainment": "#45B7D1",
-    "Shopping": "#96CEB4",
-    "Health": "#FFEAA7",
-    "Utilities": "#DDA0DD",
-    "Travel": "#F0A500",
-    "Pets": "#F8C8D4",
-    "Other": "#B0BEC5",
-}
+from app.constants import CATEGORY_COLORS
 
 
 def get_period_bounds(period: str) -> tuple[datetime, datetime]:
