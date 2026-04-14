@@ -513,12 +513,23 @@
     }
 
     // ── Category chips ────────────────────────────────────────────────────
-    function renderCategoryChips(categories) {
+    // Chips are built once per period; clicks only toggle classes/styles.
+    function setActiveChip(activeCat) {
+      document.querySelectorAll('.cat-chip').forEach(chip => {
+        const cat = chip.dataset.cat || null;
+        const isActive = cat === activeCat;
+        chip.classList.toggle('active', isActive);
+        const color = chip.dataset.color;
+        chip.style.borderColor = isActive && color ? color     : '';
+        chip.style.background  = isActive && color ? color + '22' : '';
+      });
+    }
+
+    function buildCategoryChips(categories) {
       const container = document.getElementById('category-chips');
-      const allActive = selectedCategory === null;
 
       const allChip = `
-        <div class="cat-chip${allActive ? ' active' : ''}" data-cat="">
+        <div class="cat-chip active" data-cat="" data-color="">
           <div class="cat-chip-emoji">🏷️</div>
           <div class="cat-chip-name">All</div>
           <div class="cat-chip-amount">—</div>
@@ -528,10 +539,8 @@
         .filter(c => c.total > 0)
         .map(c => {
           const emoji = CATEGORY_EMOJIS[c.name] || '📦';
-          const active = selectedCategory === c.name;
           return `
-            <div class="cat-chip${active ? ' active' : ''}" data-cat="${c.name}"
-                 style="${active ? `border-color:${c.color};background:${c.color}22;` : ''}">
+            <div class="cat-chip" data-cat="${c.name}" data-color="${c.color}">
               <div class="cat-chip-emoji">${emoji}</div>
               <div class="cat-chip-name">${c.name}</div>
               <div class="cat-chip-amount">$${c.total.toFixed(0)}</div>
@@ -543,10 +552,10 @@
       container.querySelectorAll('.cat-chip').forEach(chip => {
         chip.addEventListener('click', () => {
           const cat = chip.dataset.cat || null;
-          selectedCategory = (selectedCategory === cat && cat !== null) ? null : cat;
+          // Toggle off if already selected; otherwise select
+          selectedCategory = selectedCategory === cat ? null : cat;
+          setActiveChip(selectedCategory);
           loadTransactions();
-          // Re-render chips to update active state without full reload
-          renderCategoryChips(categories);
         });
       });
     }
@@ -554,7 +563,7 @@
     async function loadCategoryChips(period) {
       try {
         const data = await apiFetch(`/api/v1/categories?period=${period}`);
-        renderCategoryChips(data.categories);
+        buildCategoryChips(data.categories);
       } catch (e) {
         console.error('Category chips load failed:', e);
       }
