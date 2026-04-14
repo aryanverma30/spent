@@ -114,34 +114,19 @@ docs: document Phase 2 bot setup in README
 
 ---
 
-## Learning Scaffold Note
-
-Files marked with `# TODO:` blocks are **intentionally incomplete** — the user
-is learning FastAPI and SQLAlchemy by filling in the implementation themselves.
-
-**Do not fill in TODO blocks unless the user explicitly asks you to.**
-
-When helping with TODO blocks:
-1. Explain *why* the code is structured the way it is
-2. Walk through the concepts involved before showing the answer
-3. Suggest the user attempt it first, then offer a solution
-
----
-
 ## What NOT to do
 
 - Never commit `.env` (only `.env.example` with placeholder values)
 - Never use synchronous SQLAlchemy calls (`session.execute` without `await`)
 - Never skip Alembic — always migrate, never use `Base.metadata.create_all()`
 - Never hardcode credentials or API keys
-- Never remove `TODO:` scaffold comments without the user's instruction
 - Never use `@app.on_event` (deprecated) — use `lifespan` context manager
 
 ---
 
-## Testing (Phase 2+)
+## Testing
 
-Tests will live in `backend/tests/`. Use:
+Tests live in `backend/tests/`. Use:
 - `pytest` + `pytest-asyncio` for async tests
 - `httpx.AsyncClient` for endpoint integration tests
 - A separate test database (`spent_test`) via override of `get_session`
@@ -153,7 +138,7 @@ Tests will live in `backend/tests/`. Use:
 | Variable                   | Required | Description                              |
 |----------------------------|----------|------------------------------------------|
 | `DATABASE_URL`             | Yes      | asyncpg connection string                |
-| `ANTHROPIC_API_KEY`        | Phase 3  | Claude API key for categorization        |
-| `TELEGRAM_BOT_TOKEN`       | Phase 2  | Telegram bot token                       |
-| `AI_CONFIDENCE_THRESHOLD`  | Phase 3  | Min confidence to accept AI category     |
+| `ANTHROPIC_API_KEY`        | Yes      | Claude API key for categorization        |
+| `TELEGRAM_BOT_TOKEN`       | Yes      | Telegram bot token                       |
+| `AI_CONFIDENCE_THRESHOLD`  | No       | Min confidence to accept AI category     |
 | `ENVIRONMENT`              | No       | `development` or `production`            |
