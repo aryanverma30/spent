@@ -12,7 +12,7 @@ CATEGORIES: list[str] = [
     "Entertainment",
     "Shopping",
     "Health",
-    "Utilities",
+    "Housing",
     "Travel",
     "Pets",
     "Other",
