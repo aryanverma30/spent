@@ -52,5 +52,6 @@ async def get_insights(session: AsyncSession = Depends(get_session)) -> dict:
 
         summary = await generate_insights(breakdown, days_remaining)
         return {"summary": summary}
-    except Exception as e:
-        return {"summary": f"Insights temporarily unavailable. Try again later."}
+    except Exception:
+        logger.exception("Unexpected error in get_insights")
+        return {"summary": "Insights temporarily unavailable. Try again later."}
