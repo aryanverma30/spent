@@ -52,23 +52,34 @@ Do not use bullet points."""
 async def parse_transaction(raw_input: str) -> dict:
     """Parse a natural language spending message into structured data using Claude.
 
-    Raises RuntimeError (from get_client) if API key is not set, or any
-    anthropic exception on API failure — callers must handle both.
+    Raises RuntimeError if the API key is missing, the Anthropic API call
+    fails, or the model returns non-JSON output.  Callers should catch
+    RuntimeError and surface a user-friendly message.
     """
     client = get_client()
-    message = await client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=256,
-        system=PARSE_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": raw_input}],
-    )
+    try:
+        message = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=256,
+            system=PARSE_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": raw_input}],
+        )
+    except anthropic.APIError as exc:
+        logger.error("Anthropic API error in parse_transaction: %s", exc)
+        raise RuntimeError(f"AI service unavailable: {exc}") from exc
+
     text = next(block.text for block in message.content if block.type == "text").strip()
     if text.startswith("```"):
         text = text.split("```", 2)[1]
         if text.startswith("json"):
             text = text[4:]
         text = text.strip()
-    return json.loads(text)
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        logger.error("Claude returned non-JSON in parse_transaction: %r", text)
+        raise RuntimeError(f"AI returned an unexpected response format: {exc}") from exc
 
 
 async def generate_insights(breakdown: list[dict], days_remaining: int) -> str:
