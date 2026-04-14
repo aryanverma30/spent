@@ -23,6 +23,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# allow_origins=["*"] is intentional for a self-hosted, single-user deployment
+# where the API is only reachable from the owner's own devices (Telegram bot,
+# iOS widget, local browser).  If this app were ever exposed as a multi-tenant
+# service or consumed by a third-party frontend, replace "*" with an explicit
+# list of trusted origins (e.g. ["https://yourapp.example.com"]).
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
