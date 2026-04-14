@@ -7,6 +7,7 @@ If you change CATEGORIES or CATEGORY_COLORS, update both files together.
 
 CATEGORIES: list[str] = [
     "Food & Drink",
+    "Groceries",
     "Transport",
     "Entertainment",
     "Shopping",

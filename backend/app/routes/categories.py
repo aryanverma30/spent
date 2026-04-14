@@ -10,6 +10,7 @@ router = APIRouter(prefix="/categories", tags=["categories"])
 
 CATEGORIES: list[str] = [
     "Food & Drink",
+    "Groceries",
     "Transport",
     "Entertainment",
     "Shopping",
@@ -22,6 +23,7 @@ CATEGORIES: list[str] = [
 
 CATEGORY_COLORS: dict[str, str] = {
     "Food & Drink": "#FF6B6B",
+    "Groceries": "#52B788",
     "Transport": "#4ECDC4",
     "Entertainment": "#45B7D1",
     "Shopping": "#96CEB4",
