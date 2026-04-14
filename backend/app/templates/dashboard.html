@@ -167,6 +167,53 @@
       justify-content: center;
     }
 
+    /* ── Category chips ─────────────────────────────────────────────────── */
+    .category-chips-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding: 0 20px 4px;
+      margin-bottom: 16px;
+    }
+    .category-chips-scroll::-webkit-scrollbar { display: none; }
+    .category-chips-inner {
+      display: flex;
+      gap: 8px;
+      width: max-content;
+    }
+    .cat-chip {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      background: var(--bg-card);
+      border: 2px solid transparent;
+      border-radius: 14px;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: border-color 0.18s, background 0.18s;
+      min-width: 72px;
+      box-shadow: var(--shadow-card);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .cat-chip.active {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+    .cat-chip-emoji { font-size: 20px; line-height: 1; }
+    .cat-chip-name {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+    .cat-chip.active .cat-chip-name { color: var(--accent); }
+    .cat-chip-amount {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
     /* ── Category breakdown ──────────────────────────────────────────────── */
     .category-row {
       margin-bottom: 14px;
@@ -331,6 +378,13 @@
       <div class="hero-period" id="period-label">This Month</div>
     </section>
 
+    <!-- Category chips filter -->
+    <div class="category-chips-scroll">
+      <div class="category-chips-inner" id="category-chips">
+        <!-- populated by JS -->
+      </div>
+    </div>
+
     <!-- Charts row -->
     <div class="charts-row">
       <div class="chart-card">
@@ -393,6 +447,7 @@
     };
 
     let currentPeriod = 'monthly';
+    let selectedCategory = null;
 
     // ── API helpers ───────────────────────────────────────────────────────
     async function apiFetch(path) {
@@ -457,6 +512,67 @@
       }).join('');
     }
 
+    // ── Category chips ────────────────────────────────────────────────────
+    function renderCategoryChips(categories) {
+      const container = document.getElementById('category-chips');
+      const allActive = selectedCategory === null;
+
+      const allChip = `
+        <div class="cat-chip${allActive ? ' active' : ''}" data-cat="">
+          <div class="cat-chip-emoji">🏷️</div>
+          <div class="cat-chip-name">All</div>
+          <div class="cat-chip-amount">—</div>
+        </div>`;
+
+      const chips = categories
+        .filter(c => c.total > 0)
+        .map(c => {
+          const emoji = CATEGORY_EMOJIS[c.name] || '📦';
+          const active = selectedCategory === c.name;
+          return `
+            <div class="cat-chip${active ? ' active' : ''}" data-cat="${c.name}"
+                 style="${active ? `border-color:${c.color};background:${c.color}22;` : ''}">
+              <div class="cat-chip-emoji">${emoji}</div>
+              <div class="cat-chip-name">${c.name}</div>
+              <div class="cat-chip-amount">$${c.total.toFixed(0)}</div>
+            </div>`;
+        }).join('');
+
+      container.innerHTML = allChip + chips;
+
+      container.querySelectorAll('.cat-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          const cat = chip.dataset.cat || null;
+          selectedCategory = (selectedCategory === cat && cat !== null) ? null : cat;
+          loadTransactions();
+          // Re-render chips to update active state without full reload
+          renderCategoryChips(categories);
+        });
+      });
+    }
+
+    async function loadCategoryChips(period) {
+      try {
+        const data = await apiFetch(`/api/v1/categories?period=${period}`);
+        renderCategoryChips(data.categories);
+      } catch (e) {
+        console.error('Category chips load failed:', e);
+      }
+    }
+
+    async function loadTransactions() {
+      const txList = document.getElementById('transactions-list');
+      let url = `/api/v1/transactions?limit=10`;
+      if (selectedCategory) url += `&category=${encodeURIComponent(selectedCategory)}`;
+      try {
+        const transactions = await apiFetch(url);
+        txList.innerHTML = renderTransactions(transactions);
+      } catch (e) {
+        txList.innerHTML = `<div class="error-text">Failed to load transactions</div>`;
+        console.error('Transactions load failed:', e);
+      }
+    }
+
     // ── Chart loading ─────────────────────────────────────────────────────
     function loadCharts(period) {
       const donutImg = document.getElementById('donut-chart');
@@ -474,6 +590,7 @@
     // ── Main load ─────────────────────────────────────────────────────────
     async function loadDashboard(period) {
       currentPeriod = period;
+      selectedCategory = null;
 
       // Update active tab
       document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -488,11 +605,11 @@
       amountEl.textContent = '$0.00';
       amountEl.classList.add('skeleton');
 
-      // Load charts (async, independent)
+      // Load charts and category chips (async, independent)
       loadCharts(period);
+      loadCategoryChips(period);
 
-      // Load summary + categories independently from transactions so one
-      // failure does not blank out the other section.
+      // Load summary + breakdown
       try {
         const summary = await apiFetch(`/api/v1/summary?period=${period}`);
         amountEl.classList.remove('skeleton');
@@ -508,15 +625,8 @@
         console.error('Summary load failed:', e);
       }
 
-      try {
-        const transactions = await apiFetch(`/api/v1/transactions?limit=10`);
-        document.getElementById('transactions-list').innerHTML =
-          renderTransactions(transactions);
-      } catch (e) {
-        document.getElementById('transactions-list').innerHTML =
-          `<div class="error-text">Failed to load transactions</div>`;
-        console.error('Transactions load failed:', e);
-      }
+      // Load transactions (respects selectedCategory)
+      loadTransactions();
     }
 
     async function loadInsights() {
