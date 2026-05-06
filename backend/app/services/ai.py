@@ -30,19 +30,47 @@ def get_client() -> anthropic.AsyncAnthropic:
     return _client
 
 
-PARSE_SYSTEM_PROMPT = """You are a personal finance assistant. Extract spending information from the user's message
-and return ONLY valid JSON with this exact schema:
-{ "amount": float, "merchant": string, "category": string, "confidence": float }
+PARSE_SYSTEM_PROMPT = """You are a personal finance assistant. Today's date is {TODAY}.
 
-Allowed categories (use EXACTLY one of these strings):
-Food & Drink, Transport, Entertainment, Shopping, Health, Utilities, Travel, Pets, Other
+Determine whether the user's message is a spending entry, a spending query, or neither.
 
-Rules:
+─── SPENDING ENTRY ────────────────────────────────────────────────────────────
+If the message records a purchase (e.g. "$12 Chipotle", "Uber $22", "groceries $45"):
+Return ONLY: {"amount": float, "merchant": string, "category": string, "confidence": float}
+
+Allowed categories — use EXACTLY one of these strings:
+Food & Drink, Groceries, Transport, Entertainment, Shopping, Health, Housing, Travel, Pets, Other
+
+Category rules:
+- "groceries", "grocery", "supermarket", "whole foods", "trader joes", "aldi", "costco" → Groceries
+- "restaurant", "coffee", "cafe", "bar", "doordash", "uber eats", "grubhub", "chipotle", "mcdonald" → Food & Drink
+- "uber", "lyft", "gas", "parking", "transit", "metro", "taxi" → Transport
+- "rent", "mortgage", "utilities", "electric", "water", "internet", "wifi" → Housing
 - amount must be a positive float (strip $ signs)
 - merchant should be a clean, capitalized name
 - confidence is 0-1 representing how sure you are
-- If the message is not a valid spending entry, return: { "error": "not_a_transaction" }
-- Return ONLY the JSON object, no other text"""
+
+─── SPENDING QUERY ─────────────────────────────────────────────────────────────
+If the message asks about spending for any date or period — past OR current — return a spending query.
+This includes: "how much did I spend", "show me my spending", "summary", "what did I spend", "spending for".
+
+Return ONLY: {"type": "spending_query", "period": "daily"|"weekly"|"monthly", "date": "YYYY-MM-DD"}
+
+Examples:
+- "how much did I spend on May 4th" → {"type": "spending_query", "period": "daily", "date": "2026-05-04"}
+- "show me May 4th spending" → {"type": "spending_query", "period": "daily", "date": "2026-05-04"}
+- "weekly spending of May 4th" → {"type": "spending_query", "period": "weekly", "date": "2026-05-04"}
+- "spending for April" → {"type": "spending_query", "period": "monthly", "date": "2026-04-01"}
+- "show me my monthly summary for May" → {"type": "spending_query", "period": "monthly", "date": "2026-05-01"}
+- "May spending" → {"type": "spending_query", "period": "monthly", "date": "2026-05-01"}
+- Use the first day of the month as date for monthly queries.
+- Use the current year if not specified.
+
+─── UNRECOGNIZED ───────────────────────────────────────────────────────────────
+If the message is neither a spending entry nor a spending query:
+Return ONLY: {"error": "not_a_transaction"}
+
+Return ONLY the JSON object, no other text."""
 
 INSIGHTS_SYSTEM_PROMPT = """You are a friendly personal finance coach. Given the user's spending breakdown,
 write a 2-3 sentence summary. Be specific with numbers. Be encouraging but honest.
@@ -52,16 +80,23 @@ Do not use bullet points."""
 async def parse_transaction(raw_input: str) -> dict:
     """Parse a natural language spending message into structured data using Claude.
 
+    Also detects spending queries (e.g. "how much did I spend on May 4th") and
+    returns {"type": "spending_query", "period": ..., "date": ...} for those.
+
     Raises RuntimeError if the API key is missing, the Anthropic API call
     fails, or the model returns non-JSON output.  Callers should catch
     RuntimeError and surface a user-friendly message.
     """
+    from datetime import date
+    today = date.today().isoformat()
+    system = PARSE_SYSTEM_PROMPT.replace("{TODAY}", today)
+
     client = get_client()
     try:
         message = await client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=256,
-            system=PARSE_SYSTEM_PROMPT,
+            system=system,
             messages=[{"role": "user", "content": raw_input}],
         )
     except anthropic.APIError as exc:

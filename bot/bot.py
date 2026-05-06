@@ -1,6 +1,7 @@
 """Telegram bot for Spent — log expenses with natural language, powered by Claude AI."""
 import logging
 import os
+from io import BytesIO
 from typing import Optional
 
 import httpx
@@ -32,11 +33,12 @@ from constants import CATEGORIES  # noqa: E402 — mirrors backend/app/constants
 
 CATEGORY_EMOJIS = {
     "Food & Drink": "🍔",
+    "Groceries": "🌱",
     "Transport": "🚗",
     "Entertainment": "🎬",
     "Shopping": "🛍️",
     "Health": "💊",
-    "Utilities": "💡",
+    "Housing": "🏠",
     "Travel": "✈️",
     "Pets": "🐾",
     "Other": "📦",
@@ -64,6 +66,18 @@ async def api_get(path: str, params: dict | None = None) -> Optional[dict | list
             return resp.json()
         except Exception as e:
             logger.error(f"API GET {path} failed: {e}")
+            return None
+
+
+async def api_get_bytes(path: str, params: dict | None = None) -> Optional[bytes]:
+    """GET from the backend API and return raw bytes, or None on error."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            resp = await client.get(f"{BACKEND_URL}/api/v1{path}", params=params or {})
+            resp.raise_for_status()
+            return resp.content
+        except Exception as e:
+            logger.error(f"API GET bytes {path} failed: {e}")
             return None
 
 
@@ -103,7 +117,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "  • `$12 Chipotle`\n"
         "  • `Uber $22`\n"
         "  • `Bought groceries for $45`\n\n"
-        "I'll use AI to categorize it and save it automatically.\n\n"
+        "You can also ask about past spending:\n"
+        "  • `How much did I spend on May 4th?`\n"
+        "  • `Weekly spending of May 4th`\n"
+        "  • `Spending for April`\n\n"
         "*Commands:*\n"
         "/history — your last 10 transactions\n"
         "/summary — this month's spending by category\n"
@@ -178,12 +195,79 @@ async def delete_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 
 # ---------------------------------------------------------------------------
+# Spending query handler
+# ---------------------------------------------------------------------------
+
+
+_PERIOD_LABELS = {
+    "daily": "on",
+    "weekly": "week of",
+    "monthly": "for",
+}
+
+
+async def handle_spending_query(
+    update: Update, period: str, date: str
+) -> None:
+    """Fetch and display a donut chart + breakdown + transaction list for a given period."""
+    await update.message.reply_text("📊 Fetching your spending data…")
+
+    params = {"period": period, "date": date}
+
+    data = await api_get("/summary", params)
+    if not data or data.get("total_spent", 0) == 0:
+        preposition = _PERIOD_LABELS.get(period, "for")
+        await update.message.reply_text(f"No spending recorded {preposition} {date}.")
+        return
+
+    chart_bytes = await api_get_bytes("/charts/donut", params)
+    transactions = await api_get("/transactions", {**params, "limit": 50})
+
+    # Build period label for display
+    preposition = _PERIOD_LABELS.get(period, "for")
+    if period == "monthly":
+        display_date = date[:7]  # "2026-04" → readable enough
+    else:
+        display_date = date
+
+    lines = [f"📊 *Spending {preposition} {display_date}* — Total: ${data['total_spent']:.2f}\n"]
+    for item in data.get("breakdown", []):
+        emoji = CATEGORY_EMOJIS.get(item["category"], "📦")
+        pct = (item["total"] / data["total_spent"] * 100) if data["total_spent"] > 0 else 0
+        lines.append(
+            f"{emoji} *{item['category']}*: ${item['total']:.2f} "
+            f"({item['count']} txn, {pct:.0f}%)"
+        )
+
+    if transactions:
+        lines.append("\n*Transactions:*")
+        for t in transactions:
+            emoji = CATEGORY_EMOJIS.get(t["category"], "📦")
+            lines.append(f"{emoji} {t['merchant']} — ${float(t['amount']):.2f}")
+
+    caption = "\n".join(lines)
+
+    # Telegram captions max out at 1024 chars; truncate gracefully
+    if len(caption) > 1020:
+        caption = caption[:1020] + "…"
+
+    if chart_bytes:
+        await update.message.reply_photo(
+            photo=BytesIO(chart_bytes),
+            caption=caption,
+            parse_mode="Markdown",
+        )
+    else:
+        await update.message.reply_text(caption, parse_mode="Markdown")
+
+
+# ---------------------------------------------------------------------------
 # Message Handler (core expense logging flow)
 # ---------------------------------------------------------------------------
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle plain text messages — parse with AI and log the transaction."""
+    """Handle plain text messages — parse with AI and log the transaction or answer a query."""
     raw_input = update.message.text.strip()
 
     # Step 1: Parse with AI
@@ -194,10 +278,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
         return
 
+    # Step 2: Spending query — show historical chart + list
+    if parsed.get("type") == "spending_query":
+        await handle_spending_query(
+            update,
+            period=parsed["period"],
+            date=parsed["date"],
+        )
+        return
+
     if parsed.get("error") == "not_a_transaction":
         await update.message.reply_text(
-            "🤷 Couldn't parse that as a transaction.\n\n"
-            "Try: `$12 Chipotle` or `Uber $22` or `Groceries $45`",
+            "🤷 Couldn't parse that as a transaction or spending query.\n\n"
+            "To log: `$12 Chipotle` or `Uber $22`\n"
+            "To query: `How much did I spend on May 4th?`",
             parse_mode="Markdown",
         )
         return
@@ -207,7 +301,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     category = parsed.get("category", "Other")
     confidence = parsed.get("confidence", 0.0)
 
-    # Step 2: High confidence — save automatically
+    # Step 3: High confidence — save automatically
     if confidence >= AI_CONFIDENCE_THRESHOLD:
         saved = await api_post("/transactions", {
             "amount": amount,
@@ -239,7 +333,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
 
     else:
-        # Step 3: Low confidence — ask for confirmation
+        # Step 4: Low confidence — ask for confirmation
         emoji = CATEGORY_EMOJIS.get(category, "📦")
         text = (
             f"🤔 *Is this right?*\n\n"
@@ -248,7 +342,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             f"{emoji} Category: {category}\n"
             f"📊 Confidence: {confidence:.0%}"
         )
-        # Store parsed data in context for later use
         context.user_data["pending"] = {
             "amount": amount,
             "merchant": merchant,
@@ -328,6 +421,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
 
     # Apply a category update to an already-saved transaction via PATCH
+    # The PATCH route records the merchant override automatically.
     elif data.startswith("patch_cat:"):
         _, transaction_id, new_category = data.split(":", 2)
         updated = await api_patch(f"/transactions/{transaction_id}", {"category": new_category})
@@ -340,7 +434,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         else:
             await query.edit_message_text("❌ Could not update category. Try again.")
 
-    # Show category picker
+    # Show category picker for pending (pre-save) transaction
     elif data == "change_category":
         buttons = []
         row = []
@@ -367,6 +461,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         pending["category"] = new_category
         saved = await api_post("/transactions", pending)
         if saved:
+            # Record the user's explicit category choice for future auto-categorization
+            await api_post("/ai/learn", {
+                "merchant": pending["merchant"],
+                "category": new_category,
+            })
             emoji = CATEGORY_EMOJIS.get(new_category, "📦")
             await query.edit_message_text(
                 f"✅ *Logged with updated category!*\n\n"
@@ -402,7 +501,7 @@ def main() -> None:
     # Inline button callbacks
     app.add_handler(CallbackQueryHandler(handle_callback))
 
-    # Plain text messages (expense logging)
+    # Plain text messages (expense logging + spending queries)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logger.info("Spent bot is running. Press Ctrl+C to stop.")

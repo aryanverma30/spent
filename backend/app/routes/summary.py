@@ -13,10 +13,11 @@ router = APIRouter(prefix="/summary", tags=["summary"])
 @router.get("")
 async def get_summary(
     period: Literal["monthly", "weekly", "daily"] = Query(default="monthly"),
+    date: str | None = Query(default=None, description="YYYY-MM-DD reference date; defaults to today"),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    """Return spending totals grouped by category for the given period."""
-    start, end = get_period_bounds(period)
+    """Return spending totals grouped by category for the given period and optional date."""
+    start, end = get_period_bounds(period, date)
 
     result = await session.execute(
         select(

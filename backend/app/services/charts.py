@@ -13,34 +13,55 @@ from app.constants import CATEGORY_COLORS
 _CHICAGO = ZoneInfo("America/Chicago")
 
 
-def get_period_bounds(period: str) -> tuple[datetime, datetime]:
+def get_period_bounds(period: str, date: str | None = None) -> tuple[datetime, datetime]:
     """Return (start, end) UTC datetimes for daily/weekly/monthly periods.
 
-    - daily:   midnight-to-midnight in America/Chicago (CST/CDT)
-    - weekly:  from Monday 00:00 UTC of the current ISO week to now
-    - monthly: from 00:00 UTC on the 1st of the current calendar month to now
+    If date is None, uses today. For both cases the natural end of the period
+    is computed (e.g. end of the day, end of the week, end of the month) and
+    then capped at now+1s so in-progress periods don't show a future end time.
 
-    end is bumped by 1 second so that a transaction inserted at the exact
-    moment the query is built is never excluded by a strict < comparison.
+    - daily:   midnight-to-midnight in America/Chicago (CST/CDT)
+    - weekly:  Sunday 00:00 to Saturday 23:59:59 (weeks run Sunday–Saturday)
+    - monthly: 1st of month 00:00 to 1st of next month 00:00
     """
+    from datetime import date as date_class
+
     now = datetime.now(timezone.utc)
-    end = now + timedelta(seconds=1)   # inclusive upper bound
+
+    if date is None:
+        target_local = now.astimezone(_CHICAGO)
+    else:
+        d = date_class.fromisoformat(date)
+        target_local = datetime(d.year, d.month, d.day, 12, 0, 0, tzinfo=_CHICAGO)
 
     if period == "daily":
-        # Compute local midnight in America/Chicago, then convert back to UTC
-        now_local = now.astimezone(_CHICAGO)
-        local_midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        local_midnight = target_local.replace(hour=0, minute=0, second=0, microsecond=0)
         start = local_midnight.astimezone(timezone.utc)
+        natural_end = (local_midnight + timedelta(days=1)).astimezone(timezone.utc)
+
     elif period == "weekly":
-        # weekday() returns 0=Monday … 6=Sunday — subtracting it always
-        # lands on the Monday that started the current ISO week.
-        days_since_monday = now.weekday()  # 0 on Monday, 6 on Sunday
-        start = (now - timedelta(days=days_since_monday)).replace(
+        # Weeks run Sunday–Saturday.
+        # weekday(): 0=Mon … 6=Sun → days since last Sunday = (weekday + 1) % 7
+        days_since_sunday = (target_local.weekday() + 1) % 7
+        sunday_local = (target_local - timedelta(days=days_since_sunday)).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
-    else:  # monthly
-        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        start = sunday_local.astimezone(timezone.utc)
+        natural_end = (sunday_local + timedelta(days=7)).astimezone(timezone.utc)
 
+    else:  # monthly
+        month_start_local = target_local.replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        )
+        start = month_start_local.astimezone(timezone.utc)
+        if month_start_local.month == 12:
+            next_month = month_start_local.replace(year=month_start_local.year + 1, month=1)
+        else:
+            next_month = month_start_local.replace(month=month_start_local.month + 1)
+        natural_end = next_month.astimezone(timezone.utc)
+
+    # Cap end at now+1s so current periods don't include future time
+    end = min(natural_end, now + timedelta(seconds=1))
     return start, end
 
 

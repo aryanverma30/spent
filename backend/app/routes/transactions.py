@@ -8,6 +8,8 @@ from sqlalchemy import select
 from app.models.transaction import Transaction
 from app.models.schemas import TransactionCreate, TransactionPatch, TransactionResponse
 from app.services.db import get_session
+from app.services import merchant_learning
+from app.services.charts import get_period_bounds
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
@@ -42,12 +44,17 @@ async def list_transactions(
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     category: Optional[str] = Query(default=None),
+    period: Optional[str] = Query(default=None, description="daily/weekly/monthly — filters to that period"),
+    date: Optional[str] = Query(default=None, description="YYYY-MM-DD — reference date for period filter"),
     session: AsyncSession = Depends(get_session),
 ) -> list[Transaction]:
-    """List transactions with optional category filter, paginated, newest first."""
+    """List transactions with optional category and period filters, paginated, newest first."""
     query = select(Transaction).order_by(Transaction.created_at.desc())
     if category:
         query = query.where(Transaction.category == category)
+    if period:
+        start, end = get_period_bounds(period, date)
+        query = query.where(Transaction.created_at >= start).where(Transaction.created_at <= end)
     query = query.limit(limit).offset(offset)
     result = await session.execute(query)
     transactions = list(result.scalars().all())
@@ -62,7 +69,7 @@ async def patch_transaction(
     data: TransactionPatch,
     session: AsyncSession = Depends(get_session),
 ) -> Transaction:
-    """Partially update a transaction.  Currently supports updating category."""
+    """Partially update a transaction. Records merchant-category mapping when category changes."""
     result = await session.execute(
         select(Transaction).where(Transaction.id == transaction_id)
     )
@@ -70,6 +77,10 @@ async def patch_transaction(
     if transaction is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
     update_data = data.model_dump(exclude_unset=True)
+    if "category" in update_data:
+        await merchant_learning.record_override(
+            transaction.merchant, update_data["category"], session
+        )
     for field, value in update_data.items():
         setattr(transaction, field, value)
     await session.flush()

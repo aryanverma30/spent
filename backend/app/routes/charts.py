@@ -17,10 +17,11 @@ router = APIRouter(prefix="/charts", tags=["charts"])
 @router.get("/donut")
 async def donut_chart(
     period: Literal["monthly", "weekly", "daily"] = Query(default="monthly"),
+    date: str | None = Query(default=None, description="YYYY-MM-DD reference date; defaults to today"),
     session: AsyncSession = Depends(get_session),
 ) -> Response:
-    """Return a PNG donut chart of spending by category for the given period."""
-    start, end = get_period_bounds(period)
+    """Return a PNG donut chart of spending by category for the given period and optional date."""
+    start, end = get_period_bounds(period, date)
 
     result = await session.execute(
         select(
