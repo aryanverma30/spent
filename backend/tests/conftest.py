@@ -37,7 +37,7 @@ test_engine = create_async_engine(
 
 @event.listens_for(test_engine.sync_engine, "connect")
 def _register_sqlite_udf(dbapi_conn, _record) -> None:
-    """Register gen_random_uuid() so PostgreSQL server_defaults work on SQLite."""
+    """Register gen_random_uuid() so PostgreSQL server_defaults compile on SQLite."""
     dbapi_conn.create_function("gen_random_uuid", 0, lambda: str(uuid.uuid4()))
 
 

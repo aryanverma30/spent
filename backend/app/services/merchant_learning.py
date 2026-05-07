@@ -1,10 +1,9 @@
 """Merchant-category learning: record user corrections and look them up before AI parsing."""
 import logging
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 
 from app.models.merchant_override import MerchantOverride
 

@@ -1,4 +1,10 @@
-# Python
+# ── Environment variables — NEVER commit real credentials ──────────────────
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ── Python ─────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
@@ -13,33 +19,58 @@ dist/
 build/
 .eggs/
 *.egg
+lib/
+lib64/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+
+# ── Testing / coverage ──────────────────────────────────────────────────────
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
 
-# Environment variables — NEVER commit real credentials
-.env
-!.env.example
-
-# Docker
+# ── Docker ──────────────────────────────────────────────────────────────────
 .dockerignore
+.docker/
 
-# Alembic
-# (versions/ should be committed — migrations are source code)
+# ── Database ─────────────────────────────────────────────────────────────────
+*.sqlite
+*.db
+pgdata/
 
-# IDEs
+# ── Logs ────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Secrets / credentials ───────────────────────────────────────────────────
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+
+# ── macOS ───────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# ── IDEs ────────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
-.DS_Store
+*~
 Thumbs.db
 
-# Logs
-*.log
-logs/
-
-# Coverage
-.coverage
-htmlcov/
-coverage.xml
+# ── Node (if frontend tooling is ever added) ────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

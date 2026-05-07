@@ -1,19 +1,24 @@
 """FastAPI application entry point with lifespan, middleware, and router registration."""
+import logging
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.config import settings
+from app.routes import ai, categories, charts, dashboard, insights, summary, transactions
 from app.services.db import engine
-from app.routes import transactions, summary, insights, ai, charts, categories, dashboard
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application startup and shutdown lifecycle."""
-    print(f"[Spent] Starting in {settings.environment} mode")
+    logger.info("[Spent] Starting in %s mode", settings.environment)
     yield
     await engine.dispose()
-    print("[Spent] Engine disposed, shutting down")
+    logger.info("[Spent] Engine disposed, shutting down")
 
 
 app = FastAPI(

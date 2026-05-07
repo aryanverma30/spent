@@ -1,10 +1,13 @@
 """Summary endpoint — spending breakdown by category for a given period."""
 from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.constants import CATEGORY_COLORS
 from app.models.transaction import Transaction
-from app.services.charts import get_period_bounds, CATEGORY_COLORS
+from app.services.charts import get_period_bounds
 from app.services.db import get_session
 
 router = APIRouter(prefix="/summary", tags=["summary"])
@@ -42,7 +45,6 @@ async def get_summary(
         for row in rows
     ]
 
-    # Ensure total_spent is always a plain float (never Decimal) for JSON serialization
     total_spent = float(sum(item["total"] for item in breakdown))
 
     return {

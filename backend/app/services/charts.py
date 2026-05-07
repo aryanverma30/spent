@@ -1,5 +1,6 @@
 """Chart generation (Matplotlib headless) and period utility functions."""
 import io
+from datetime import date as _date
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -21,17 +22,15 @@ def get_period_bounds(period: str, date: str | None = None) -> tuple[datetime, d
     then capped at now+1s so in-progress periods don't show a future end time.
 
     - daily:   midnight-to-midnight in America/Chicago (CST/CDT)
-    - weekly:  Sunday 00:00 to Saturday 23:59:59 (weeks run Sunday–Saturday)
+    - weekly:  Monday 00:00 to Sunday 23:59:59 (ISO weeks, run Monday–Sunday)
     - monthly: 1st of month 00:00 to 1st of next month 00:00
     """
-    from datetime import date as date_class
-
     now = datetime.now(timezone.utc)
 
     if date is None:
         target_local = now.astimezone(_CHICAGO)
     else:
-        d = date_class.fromisoformat(date)
+        d = _date.fromisoformat(date)
         target_local = datetime(d.year, d.month, d.day, 12, 0, 0, tzinfo=_CHICAGO)
 
     if period == "daily":
@@ -40,14 +39,14 @@ def get_period_bounds(period: str, date: str | None = None) -> tuple[datetime, d
         natural_end = (local_midnight + timedelta(days=1)).astimezone(timezone.utc)
 
     elif period == "weekly":
-        # Weeks run Sunday–Saturday.
-        # weekday(): 0=Mon … 6=Sun → days since last Sunday = (weekday + 1) % 7
-        days_since_sunday = (target_local.weekday() + 1) % 7
-        sunday_local = (target_local - timedelta(days=days_since_sunday)).replace(
+        # Weeks run Monday–Sunday (ISO week).
+        # weekday(): 0=Mon … 6=Sun → days since last Monday = weekday()
+        days_since_monday = target_local.weekday()
+        monday_local = (target_local - timedelta(days=days_since_monday)).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
-        start = sunday_local.astimezone(timezone.utc)
-        natural_end = (sunday_local + timedelta(days=7)).astimezone(timezone.utc)
+        start = monday_local.astimezone(timezone.utc)
+        natural_end = (monday_local + timedelta(days=7)).astimezone(timezone.utc)
 
     else:  # monthly
         month_start_local = target_local.replace(

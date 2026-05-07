@@ -8,7 +8,6 @@ import httpx
 from dotenv import load_dotenv
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
-    Application,
     ApplicationBuilder,
     CallbackQueryHandler,
     CommandHandler,
@@ -53,7 +52,7 @@ async def api_post(path: str, data: dict) -> Optional[dict]:
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
-            logger.error(f"API POST {path} failed: {e}")
+            logger.error("API POST %s failed: %s", path, e)
             return None
 
 
@@ -65,7 +64,7 @@ async def api_get(path: str, params: dict | None = None) -> Optional[dict | list
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
-            logger.error(f"API GET {path} failed: {e}")
+            logger.error("API GET %s failed: %s", path, e)
             return None
 
 
@@ -77,7 +76,7 @@ async def api_get_bytes(path: str, params: dict | None = None) -> Optional[bytes
             resp.raise_for_status()
             return resp.content
         except Exception as e:
-            logger.error(f"API GET bytes {path} failed: {e}")
+            logger.error("API GET bytes %s failed: %s", path, e)
             return None
 
 
@@ -88,7 +87,7 @@ async def api_delete(path: str) -> bool:
             resp = await client.delete(f"{BACKEND_URL}/api/v1{path}")
             return resp.status_code == 204
         except Exception as e:
-            logger.error(f"API DELETE {path} failed: {e}")
+            logger.error("API DELETE %s failed: %s", path, e)
             return False
 
 
@@ -100,7 +99,7 @@ async def api_patch(path: str, data: dict) -> Optional[dict]:
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
-            logger.error(f"API PATCH {path} failed: {e}")
+            logger.error("API PATCH %s failed: %s", path, e)
             return None
 
 
@@ -134,7 +133,10 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show the last 10 transactions."""
     transactions = await api_get("/transactions", {"limit": 10})
     if not transactions:
-        await update.message.reply_text("No transactions found yet. Start logging with a message like `$12 Chipotle`!", parse_mode="Markdown")
+        await update.message.reply_text(
+            "No transactions found yet. Start logging with a message like `$12 Chipotle`!",
+            parse_mode="Markdown",
+        )
         return
 
     lines = ["📋 *Recent Transactions:*\n"]
@@ -223,10 +225,9 @@ async def handle_spending_query(
     chart_bytes = await api_get_bytes("/charts/donut", params)
     transactions = await api_get("/transactions", {**params, "limit": 50})
 
-    # Build period label for display
     preposition = _PERIOD_LABELS.get(period, "for")
     if period == "monthly":
-        display_date = date[:7]  # "2026-04" → readable enough
+        display_date = date[:7]
     else:
         display_date = date
 
@@ -270,7 +271,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     """Handle plain text messages — parse with AI and log the transaction or answer a query."""
     raw_input = update.message.text.strip()
 
-    # Step 1: Parse with AI
     parsed = await api_post("/ai/parse", {"raw_input": raw_input})
     if not parsed:
         await update.message.reply_text(
@@ -278,7 +278,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
         return
 
-    # Step 2: Spending query — show historical chart + list
     if parsed.get("type") == "spending_query":
         await handle_spending_query(
             update,
@@ -301,7 +300,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     category = parsed.get("category", "Other")
     confidence = parsed.get("confidence", 0.0)
 
-    # Step 3: High confidence — save automatically
     if confidence >= AI_CONFIDENCE_THRESHOLD:
         saved = await api_post("/transactions", {
             "amount": amount,
@@ -333,7 +331,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
 
     else:
-        # Step 4: Low confidence — ask for confirmation
         emoji = CATEGORY_EMOJIS.get(category, "📦")
         text = (
             f"🤔 *Is this right?*\n\n"
@@ -369,7 +366,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await query.answer()
     data = query.data
 
-    # Delete a transaction
     if data.startswith("delete:"):
         transaction_id = data.split(":", 1)[1]
         success = await api_delete(f"/transactions/{transaction_id}")
@@ -378,7 +374,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         else:
             await query.edit_message_text("❌ Could not delete transaction.")
 
-    # Confirm a pending transaction
     elif data == "confirm":
         pending = context.user_data.get("pending")
         if not pending:
@@ -397,12 +392,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         else:
             await query.edit_message_text("❌ Failed to save. Try again.")
 
-    # Show category picker for an ALREADY SAVED transaction (change_cat_saved:{id})
     elif data.startswith("change_cat_saved:"):
         transaction_id = data.split(":", 1)[1]
         buttons = []
         row = []
-        for i, cat in enumerate(CATEGORIES):
+        for cat in CATEGORIES:
             emoji = CATEGORY_EMOJIS.get(cat, "📦")
             row.append(
                 InlineKeyboardButton(
@@ -420,8 +414,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             reply_markup=InlineKeyboardMarkup(buttons),
         )
 
-    # Apply a category update to an already-saved transaction via PATCH
-    # The PATCH route records the merchant override automatically.
     elif data.startswith("patch_cat:"):
         _, transaction_id, new_category = data.split(":", 2)
         updated = await api_patch(f"/transactions/{transaction_id}", {"category": new_category})
@@ -434,11 +426,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         else:
             await query.edit_message_text("❌ Could not update category. Try again.")
 
-    # Show category picker for pending (pre-save) transaction
     elif data == "change_category":
         buttons = []
         row = []
-        for i, cat in enumerate(CATEGORIES):
+        for cat in CATEGORIES:
             emoji = CATEGORY_EMOJIS.get(cat, "📦")
             row.append(InlineKeyboardButton(f"{emoji} {cat}", callback_data=f"set_cat:{cat}"))
             if len(row) == 2:
@@ -451,7 +442,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             reply_markup=InlineKeyboardMarkup(buttons),
         )
 
-    # Set a specific category for the pending transaction
     elif data.startswith("set_cat:"):
         new_category = data.split(":", 1)[1]
         pending = context.user_data.get("pending")
@@ -461,7 +451,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         pending["category"] = new_category
         saved = await api_post("/transactions", pending)
         if saved:
-            # Record the user's explicit category choice for future auto-categorization
             await api_post("/ai/learn", {
                 "merchant": pending["merchant"],
                 "category": new_category,
@@ -491,17 +480,14 @@ def main() -> None:
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Commands
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("history", history))
     app.add_handler(CommandHandler("summary", summary_command))
     app.add_handler(CommandHandler("insights", insights_command))
     app.add_handler(CommandHandler("delete", delete_command))
 
-    # Inline button callbacks
     app.add_handler(CallbackQueryHandler(handle_callback))
 
-    # Plain text messages (expense logging + spending queries)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logger.info("Spent bot is running. Press Ctrl+C to stop.")

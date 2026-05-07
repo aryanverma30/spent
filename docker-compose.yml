@@ -6,6 +6,7 @@ services:
   postgres:
     image: postgres:15
     environment:
+      # These are local-dev-only defaults. Change them for any production deployment.
       POSTGRES_USER: spent
       POSTGRES_PASSWORD: spent
       POSTGRES_DB: spent
