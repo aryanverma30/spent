@@ -1,10 +1,12 @@
-"""AI insights endpoint — generates a spending summary for the current month."""
+"""AI insights endpoint — generates a spending summary for the current calendar month."""
 import calendar
 import logging
 from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.constants import CATEGORY_COLORS
 from app.models.transaction import Transaction
 from app.services.ai import generate_insights

@@ -1,5 +1,6 @@
 """Chart generation (Matplotlib headless) and period utility functions."""
 import io
+from datetime import date as _date
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -24,14 +25,12 @@ def get_period_bounds(period: str, date: str | None = None) -> tuple[datetime, d
     - weekly:  Monday 00:00 to Sunday 23:59:59 (ISO weeks, run Monday–Sunday)
     - monthly: 1st of month 00:00 to 1st of next month 00:00
     """
-    from datetime import date as date_class
-
     now = datetime.now(timezone.utc)
 
     if date is None:
         target_local = now.astimezone(_CHICAGO)
     else:
-        d = date_class.fromisoformat(date)
+        d = _date.fromisoformat(date)
         target_local = datetime(d.year, d.month, d.day, 12, 0, 0, tzinfo=_CHICAGO)
 
     if period == "daily":

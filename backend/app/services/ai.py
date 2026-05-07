@@ -1,6 +1,7 @@
 """AI service for parsing transactions and generating insights using Claude."""
 import json
 import logging
+from datetime import date as _date
 
 import anthropic
 
@@ -85,8 +86,7 @@ async def parse_transaction(raw_input: str) -> dict:
     fails, or the model returns non-JSON output.  Callers should catch
     RuntimeError and surface a user-friendly message.
     """
-    from datetime import date
-    today = date.today().isoformat()
+    today = _date.today().isoformat()
     system = PARSE_SYSTEM_PROMPT.replace("{TODAY}", today)
 
     client = get_client()
