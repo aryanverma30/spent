@@ -1,38 +1,16 @@
 """Categories endpoint — return the supported category list with period spending totals."""
 from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.constants import CATEGORIES, CATEGORY_COLORS
 from app.models.transaction import Transaction
+from app.services.charts import get_period_bounds
 from app.services.db import get_session
 
 router = APIRouter(prefix="/categories", tags=["categories"])
-
-CATEGORIES: list[str] = [
-    "Food & Drink",
-    "Groceries",
-    "Transport",
-    "Entertainment",
-    "Shopping",
-    "Health",
-    "Housing",
-    "Travel",
-    "Pets",
-    "Other",
-]
-
-CATEGORY_COLORS: dict[str, str] = {
-    "Food & Drink": "#FF6B6B",
-    "Groceries": "#52B788",
-    "Transport": "#4ECDC4",
-    "Entertainment": "#45B7D1",
-    "Shopping": "#96CEB4",
-    "Health": "#FFEAA7",
-    "Housing": "#DDA0DD",
-    "Travel": "#F0A500",
-    "Pets": "#F8C8D4",
-    "Other": "#B0BEC5",
-}
 
 
 @router.get("")
@@ -45,8 +23,6 @@ async def list_categories(
     Categories with no spending in the period are included with total=0 so the
     widget can always render a complete list without a separate static lookup.
     """
-    from app.services.charts import get_period_bounds
-
     start, end = get_period_bounds(period)
 
     result = await session.execute(

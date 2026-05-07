@@ -6,7 +6,7 @@
 // 1. Install the free "Scriptable" app from the App Store
 // 2. Open Scriptable and tap the "+" button to create a new script
 // 3. Paste this entire file into the editor
-// 4. Change BASE_URL below to your ngrok or Railway URL
+// 4. Set BASE_URL below to your Railway deployment URL
 // 5. Add a Scriptable widget to your home screen
 // 6. Long-press the widget → Edit Widget → choose this script
 // 7. Set widget size to "Medium" for best results
@@ -19,7 +19,7 @@
 // ============================================================
 
 // ── Configuration ──────────────────────────────────────────
-const BASE_URL = 'https://spent-production.up.railway.app'; // ← Railway URL
+const BASE_URL = 'https://your-app.railway.app'; // ← Replace with your Railway URL
 const PERIOD_KEY = 'spent_period';
 const LAST_FETCH_KEY = 'spent_last_fetch';
 const REFRESH_INTERVAL_S = 60; // re-fetch if data is older than this many seconds
@@ -28,20 +28,26 @@ const ACCENT = new Color('#4ECDC4');
 const WHITE = Color.white();
 const GRAY = new Color('#AAAAAA');
 
-// ── Category colors matching backend ───────────────────────
+// ── Category colors matching backend/app/constants.py ──────
 const CATEGORY_COLORS = {
   'Food & Drink': '#FF6B6B',
+  Groceries: '#52B788',
   Transport: '#4ECDC4',
   Entertainment: '#45B7D1',
   Shopping: '#96CEB4',
   Health: '#FFEAA7',
-  Utilities: '#DDA0DD',
+  Housing: '#DDA0DD',
   Travel: '#F0A500',
   Pets: '#F8C8D4',
   Other: '#B0BEC5',
 };
 
 // ── Period management ───────────────────────────────────────
+
+/**
+ * Return the active period from the widget parameter, Keychain, or default.
+ * @returns {"daily"|"weekly"|"monthly"}
+ */
 function getSavedPeriod() {
   const VALID = ['daily', 'weekly', 'monthly'];
   const param = (args.widgetParameter || '').trim().toLowerCase();
@@ -50,6 +56,11 @@ function getSavedPeriod() {
   return 'monthly';
 }
 
+/**
+ * Advance to the next period in the rotation (monthly → weekly → daily → monthly).
+ * @param {string} current - The current period string.
+ * @returns {string} The next period string.
+ */
 function cyclePeriod(current) {
   const periods = ['monthly', 'weekly', 'daily'];
   const next = periods[(periods.indexOf(current) + 1) % periods.length];
@@ -57,11 +68,22 @@ function cyclePeriod(current) {
   return next;
 }
 
+/**
+ * Capitalize the first letter of a string.
+ * @param {string} str
+ * @returns {string}
+ */
 function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 // ── API helpers ─────────────────────────────────────────────
+
+/**
+ * Fetch spending summary from the backend API.
+ * @param {string} period - "daily", "weekly", or "monthly"
+ * @returns {Promise<Object|null>} Summary JSON or null on error
+ */
 async function fetchSummary(period) {
   try {
     const req = new Request(`${BASE_URL}/api/v1/summary?period=${period}`);
@@ -73,6 +95,11 @@ async function fetchSummary(period) {
   }
 }
 
+/**
+ * Fetch the donut chart PNG from the backend.
+ * @param {string} period - "daily", "weekly", or "monthly"
+ * @returns {Promise<Image|null>} Scriptable Image or null on error
+ */
 async function fetchDonutChart(period) {
   try {
     const req = new Request(`${BASE_URL}/api/v1/charts/donut?period=${period}`);
@@ -85,6 +112,14 @@ async function fetchDonutChart(period) {
 }
 
 // ── Widget builder ──────────────────────────────────────────
+
+/**
+ * Build and return the Scriptable ListWidget.
+ * @param {Object|null} summary - Parsed summary JSON from the API, or null on fetch failure.
+ * @param {Image|null} chartImg - Donut chart image, or null if unavailable.
+ * @param {string} period - The active period label.
+ * @returns {Promise<ListWidget>}
+ */
 async function buildWidget(summary, chartImg, period) {
   const widget = new ListWidget();
   widget.backgroundColor = DARK_BG;
@@ -109,7 +144,6 @@ async function buildWidget(summary, chartImg, period) {
   widget.addSpacer(6);
 
   if (!summary) {
-    // Error state
     const errStack = widget.addStack();
     errStack.layoutVertically();
     errStack.centerAlignContent();
@@ -168,7 +202,6 @@ async function buildWidget(summary, chartImg, period) {
     rowStack.layoutHorizontally();
     rowStack.centerAlignContent();
 
-    // Color dot
     const colorHex = CATEGORY_COLORS[item.category] || '#B0BEC5';
     const dot = rowStack.addText('●');
     dot.textColor = new Color(colorHex);
@@ -176,7 +209,6 @@ async function buildWidget(summary, chartImg, period) {
 
     rowStack.addSpacer(4);
 
-    // Category name (truncated)
     const shortName = item.category.split(' ')[0];
     const nameText = rowStack.addText(shortName);
     nameText.textColor = GRAY;
@@ -184,7 +216,6 @@ async function buildWidget(summary, chartImg, period) {
 
     rowStack.addSpacer();
 
-    // Amount
     const amtText = rowStack.addText(`$${item.total.toFixed(0)}`);
     amtText.textColor = WHITE;
     amtText.font = Font.mediumSystemFont(10);
@@ -211,6 +242,11 @@ async function buildWidget(summary, chartImg, period) {
 }
 
 // ── Refresh helpers ─────────────────────────────────────────
+
+/**
+ * Return true if cached data is older than REFRESH_INTERVAL_S seconds.
+ * @returns {boolean}
+ */
 function shouldRefetch() {
   if (!Keychain.contains(LAST_FETCH_KEY)) return true;
   const lastFetch = parseInt(Keychain.get(LAST_FETCH_KEY), 10);
@@ -218,6 +254,9 @@ function shouldRefetch() {
   return ageSeconds >= REFRESH_INTERVAL_S;
 }
 
+/**
+ * Record the current timestamp as the last successful fetch time.
+ */
 function markFetched() {
   Keychain.set(LAST_FETCH_KEY, String(Date.now()));
 }
@@ -237,15 +276,8 @@ async function run() {
     await alert.present();
   }
 
-  // Always fetch fresh data if the last fetch was more than REFRESH_INTERVAL_S ago
-  let summary, chartImg;
-  if (shouldRefetch()) {
-    [summary, chartImg] = await Promise.all([fetchSummary(period), fetchDonutChart(period)]);
-    if (summary) markFetched(); // only stamp if we got good data
-  } else {
-    [summary, chartImg] = await Promise.all([fetchSummary(period), fetchDonutChart(period)]);
-    markFetched();
-  }
+  const [summary, chartImg] = await Promise.all([fetchSummary(period), fetchDonutChart(period)]);
+  if (summary) markFetched();
 
   const widget = await buildWidget(summary, chartImg, period);
 

@@ -1,15 +1,17 @@
 """API routes for CRUD operations on transactions."""
 from decimal import Decimal
-from uuid import UUID
 from typing import Optional
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.models.transaction import Transaction
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.schemas import TransactionCreate, TransactionPatch, TransactionResponse
-from app.services.db import get_session
+from app.models.transaction import Transaction
 from app.services import merchant_learning
 from app.services.charts import get_period_bounds
+from app.services.db import get_session
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
@@ -17,9 +19,9 @@ router = APIRouter(prefix="/transactions", tags=["transactions"])
 def _coerce_amount(transaction: Transaction) -> None:
     """Ensure transaction.amount is a plain float, not a Decimal.
 
-    asyncpg returns Decimal for Numeric columns.  Pydantic v2 handles the
-    coercion in most paths, but explicit conversion eliminates edge-cases
-    where jsonable_encoder sees a Decimal and raises a serialization error.
+    asyncpg returns Decimal for Numeric columns.  Must only be called AFTER
+    session.expunge(transaction) to prevent SQLAlchemy from treating the
+    attribute change as a dirty write and issuing a phantom UPDATE on commit.
     """
     if isinstance(transaction.amount, Decimal):
         transaction.amount = float(transaction.amount)  # type: ignore[assignment]
@@ -35,6 +37,7 @@ async def create_transaction(
     session.add(transaction)
     await session.flush()
     await session.refresh(transaction)
+    session.expunge(transaction)
     _coerce_amount(transaction)
     return transaction
 
@@ -59,6 +62,7 @@ async def list_transactions(
     result = await session.execute(query)
     transactions = list(result.scalars().all())
     for t in transactions:
+        session.expunge(t)
         _coerce_amount(t)
     return transactions
 
@@ -85,6 +89,7 @@ async def patch_transaction(
         setattr(transaction, field, value)
     await session.flush()
     await session.refresh(transaction)
+    session.expunge(transaction)
     _coerce_amount(transaction)
     return transaction
 

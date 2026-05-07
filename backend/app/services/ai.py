@@ -1,12 +1,10 @@
 """AI service for parsing transactions and generating insights using Claude."""
-
 import json
 import logging
 
 import anthropic
 
 from app.config import settings
-from app.constants import CATEGORIES
 
 logger = logging.getLogger(__name__)
 
