@@ -140,5 +140,7 @@ Tests live in `backend/tests/`. Use:
 | `DATABASE_URL`             | Yes      | asyncpg connection string                |
 | `ANTHROPIC_API_KEY`        | Yes      | Claude API key for categorization        |
 | `TELEGRAM_BOT_TOKEN`       | Yes      | Telegram bot token                       |
+| `TELEGRAM_ALLOWED_USER_IDS`| Yes (bot)| Comma-separated user IDs the bot obeys   |
+| `API_TOKEN`                | Yes (prod)| Bearer token for all `/api/v1` routes   |
 | `AI_CONFIDENCE_THRESHOLD`  | No       | Min confidence to accept AI category     |
 | `ENVIRONMENT`              | No       | `development` or `production`            |

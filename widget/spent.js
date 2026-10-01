@@ -6,7 +6,8 @@
 // 1. Install the free "Scriptable" app from the App Store
 // 2. Open Scriptable and tap the "+" button to create a new script
 // 3. Paste this entire file into the editor
-// 4. Set BASE_URL below to your Railway deployment URL
+// 4. Set BASE_URL below to your Railway deployment URL and API_TOKEN to the
+//    same value as the backend's API_TOKEN env var
 // 5. Add a Scriptable widget to your home screen
 // 6. Long-press the widget → Edit Widget → choose this script
 // 7. Set widget size to "Medium" for best results
@@ -20,6 +21,7 @@
 
 // ── Configuration ──────────────────────────────────────────
 const BASE_URL = 'https://your-app.railway.app'; // ← Replace with your Railway URL
+const API_TOKEN = 'your-api-token-here';          // ← Same value as the backend's API_TOKEN
 const PERIOD_KEY = 'spent_period';
 const LAST_FETCH_KEY = 'spent_last_fetch';
 const REFRESH_INTERVAL_S = 60; // re-fetch if data is older than this many seconds
@@ -80,15 +82,32 @@ function capitalize(str) {
 // ── API helpers ─────────────────────────────────────────────
 
 /**
+ * Build an authenticated request to the backend API.
+ * @param {string} path - Path under /api/v1, e.g. "/summary?period=monthly"
+ * @param {number} timeout - Timeout in seconds
+ * @returns {Request}
+ */
+function apiRequest(path, timeout) {
+  const req = new Request(`${BASE_URL}/api/v1${path}`);
+  req.headers = { Authorization: `Bearer ${API_TOKEN}` };
+  req.timeoutInterval = timeout;
+  return req;
+}
+
+/**
  * Fetch spending summary from the backend API.
  * @param {string} period - "daily", "weekly", or "monthly"
  * @returns {Promise<Object|null>} Summary JSON or null on error
  */
 async function fetchSummary(period) {
   try {
-    const req = new Request(`${BASE_URL}/api/v1/summary?period=${period}`);
-    req.timeoutInterval = 10;
-    return await req.loadJSON();
+    const req = apiRequest(`/summary?period=${period}`, 10);
+    const json = await req.loadJSON();
+    if (req.response.statusCode !== 200) {
+      console.error(`fetchSummary failed: HTTP ${req.response.statusCode}`);
+      return null;
+    }
+    return json;
   } catch (e) {
     console.error('fetchSummary failed: ' + e.message);
     return null;
@@ -102,9 +121,7 @@ async function fetchSummary(period) {
  */
 async function fetchDonutChart(period) {
   try {
-    const req = new Request(`${BASE_URL}/api/v1/charts/donut?period=${period}`);
-    req.timeoutInterval = 15;
-    return await req.loadImage();
+    return await apiRequest(`/charts/donut?period=${period}`, 15).loadImage();
   } catch (e) {
     console.error('fetchDonutChart failed: ' + e.message);
     return null;
@@ -124,7 +141,8 @@ async function buildWidget(summary, chartImg, period) {
   const widget = new ListWidget();
   widget.backgroundColor = DARK_BG;
   widget.setPadding(12, 14, 12, 14);
-  widget.url = `${BASE_URL}/`;  // opens the spending dashboard in Safari
+  // Opens the dashboard in Safari; the page saves the token from the fragment.
+  widget.url = `${BASE_URL}/#token=${encodeURIComponent(API_TOKEN)}`;
 
   // Header row: icon + title + period badge
   const headerStack = widget.addStack();
@@ -153,7 +171,7 @@ async function buildWidget(summary, chartImg, period) {
     errText.font = Font.mediumSystemFont(12);
     errText.centerAlignText();
 
-    const hintText = errStack.addText('Check BASE_URL in script');
+    const hintText = errStack.addText('Check BASE_URL and API_TOKEN');
     hintText.textColor = GRAY;
     hintText.font = Font.systemFont(10);
     hintText.centerAlignText();
@@ -263,17 +281,25 @@ function markFetched() {
 
 // ── Main ────────────────────────────────────────────────────
 async function run() {
-  const period = getSavedPeriod();
+  let period = getSavedPeriod();
 
   if (!config.runsInWidget) {
+    const periods = ['monthly', 'weekly', 'daily'];
+    const nextPeriod = periods[(periods.indexOf(period) + 1) % periods.length];
+
     const alert = new Alert();
     alert.title = '💸 Spent Widget';
     alert.message = `Current period: ${capitalize(period)}\nChange it below or tap Preview to see the widget.`;
-    alert.addAction('Switch to ' + capitalize(cyclePeriod(period)));
-    alert.addAction('Preview Widget');
-    alert.addCancelAction('Cancel');
+    alert.addAction('Switch to ' + capitalize(nextPeriod)); // index 0
+    alert.addAction('Preview Widget');                      // index 1
+    alert.addCancelAction('Cancel');                        // index -1
 
-    await alert.present();
+    const choice = await alert.present();
+    if (choice === -1) {
+      Script.complete();
+      return;
+    }
+    if (choice === 0) period = cyclePeriod(period);
   }
 
   const [summary, chartImg] = await Promise.all([fetchSummary(period), fetchDonutChart(period)]);

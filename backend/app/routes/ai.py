@@ -1,8 +1,9 @@
 """AI endpoints for parsing natural language transaction input and recording learned mappings."""
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.schemas import validate_category
 from app.services.ai import parse_transaction
 from app.services.db import get_session
 from app.services import merchant_learning
@@ -21,6 +22,8 @@ class LearnRequest(BaseModel):
 
     merchant: str
     category: str
+
+    _check_category = field_validator("category")(validate_category)
 
 
 @router.post("/parse")

@@ -2,7 +2,16 @@
 import uuid
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.constants import CATEGORIES
+
+
+def validate_category(value: str | None) -> str | None:
+    """Reject category names that aren't in the shared CATEGORIES list."""
+    if value is not None and value not in CATEGORIES:
+        raise ValueError(f"category must be one of: {', '.join(CATEGORIES)}")
+    return value
 
 
 class TransactionPatch(BaseModel):
@@ -10,6 +19,8 @@ class TransactionPatch(BaseModel):
 
     category: Optional[str] = Field(None, max_length=50)
     note: Optional[str] = None
+
+    _check_category = field_validator("category")(validate_category)
 
 
 class TransactionCreate(BaseModel):
@@ -21,6 +32,8 @@ class TransactionCreate(BaseModel):
     raw_input: str = Field(..., description="Original user input string")
     ai_confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
     note: Optional[str] = None
+
+    _check_category = field_validator("category")(validate_category)
 
 
 class TransactionResponse(BaseModel):

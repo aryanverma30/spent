@@ -2,11 +2,12 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.routes import ai, categories, charts, dashboard, insights, summary, transactions
+from app.services.auth import require_api_token
 from app.services.db import engine
 
 logger = logging.getLogger(__name__)
@@ -41,21 +42,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Every /api/v1 route requires the bearer token (see services/auth.py).
+_api_auth = [Depends(require_api_token)]
+
 # Core CRUD
-app.include_router(transactions.router, prefix="/api/v1")
+app.include_router(transactions.router, prefix="/api/v1", dependencies=_api_auth)
 
 # Analytics
-app.include_router(summary.router, prefix="/api/v1")
-app.include_router(insights.router, prefix="/api/v1")
-app.include_router(categories.router, prefix="/api/v1")
+app.include_router(summary.router, prefix="/api/v1", dependencies=_api_auth)
+app.include_router(insights.router, prefix="/api/v1", dependencies=_api_auth)
+app.include_router(categories.router, prefix="/api/v1", dependencies=_api_auth)
 
 # AI parsing
-app.include_router(ai.router, prefix="/api/v1")
+app.include_router(ai.router, prefix="/api/v1", dependencies=_api_auth)
 
 # Charts (PNG images)
-app.include_router(charts.router, prefix="/api/v1")
+app.include_router(charts.router, prefix="/api/v1", dependencies=_api_auth)
 
-# Web dashboard — served at / (no prefix, tapping widget opens this)
+# Web dashboard — served at / (no prefix, tapping widget opens this).
+# The page itself holds no data; its API calls carry the token.
 app.include_router(dashboard.router)
 
 

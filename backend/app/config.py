@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     # Confidence threshold below which we fall back to category="other".
     ai_confidence_threshold: float = 0.75
 
+    # ── API Auth ──────────────────────────────────────────────────────────────
+    # Shared secret required as "Authorization: Bearer <token>" on every
+    # /api/v1 request. Generate one with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+    # If unset, the API is open in development and refuses all requests in production.
+    api_token: str = ""
+
     # ── App ───────────────────────────────────────────────────────────────────
     # Controls SQL echo logging and debug behavior.
     # Values: "development" | "production"

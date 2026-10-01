@@ -9,10 +9,12 @@ from dotenv import load_dotenv
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     ApplicationBuilder,
+    ApplicationHandlerStop,
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
+    TypeHandler,
     filters,
 )
 
@@ -27,6 +29,11 @@ logger = logging.getLogger(__name__)
 BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8000")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 AI_CONFIDENCE_THRESHOLD = float(os.getenv("AI_CONFIDENCE_THRESHOLD", "0.75"))
+API_TOKEN = os.getenv("API_TOKEN", "")
+# Comma-separated Telegram user IDs allowed to use the bot. Anyone else is ignored.
+ALLOWED_USER_IDS = {
+    int(uid) for uid in os.getenv("TELEGRAM_ALLOWED_USER_IDS", "").split(",") if uid.strip()
+}
 
 from constants import CATEGORIES  # noqa: E402 — mirrors backend/app/constants.py
 
@@ -44,11 +51,17 @@ CATEGORY_EMOJIS = {
 }
 
 
+def _client() -> httpx.AsyncClient:
+    """Return an HTTP client that sends the backend API token on every request."""
+    headers = {"Authorization": f"Bearer {API_TOKEN}"} if API_TOKEN else {}
+    return httpx.AsyncClient(base_url=f"{BACKEND_URL}/api/v1", headers=headers, timeout=30.0)
+
+
 async def api_post(path: str, data: dict) -> Optional[dict]:
     """POST to the backend API and return the JSON response, or None on error."""
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with _client() as client:
         try:
-            resp = await client.post(f"{BACKEND_URL}/api/v1{path}", json=data)
+            resp = await client.post(path, json=data)
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
@@ -58,9 +71,9 @@ async def api_post(path: str, data: dict) -> Optional[dict]:
 
 async def api_get(path: str, params: dict | None = None) -> Optional[dict | list]:
     """GET from the backend API and return the JSON response, or None on error."""
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with _client() as client:
         try:
-            resp = await client.get(f"{BACKEND_URL}/api/v1{path}", params=params or {})
+            resp = await client.get(path, params=params or {})
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
@@ -70,9 +83,9 @@ async def api_get(path: str, params: dict | None = None) -> Optional[dict | list
 
 async def api_get_bytes(path: str, params: dict | None = None) -> Optional[bytes]:
     """GET from the backend API and return raw bytes, or None on error."""
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with _client() as client:
         try:
-            resp = await client.get(f"{BACKEND_URL}/api/v1{path}", params=params or {})
+            resp = await client.get(path, params=params or {})
             resp.raise_for_status()
             return resp.content
         except Exception as e:
@@ -82,9 +95,9 @@ async def api_get_bytes(path: str, params: dict | None = None) -> Optional[bytes
 
 async def api_delete(path: str) -> bool:
     """DELETE from the backend API. Returns True on success."""
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with _client() as client:
         try:
-            resp = await client.delete(f"{BACKEND_URL}/api/v1{path}")
+            resp = await client.delete(path)
             return resp.status_code == 204
         except Exception as e:
             logger.error("API DELETE %s failed: %s", path, e)
@@ -93,14 +106,32 @@ async def api_delete(path: str) -> bool:
 
 async def api_patch(path: str, data: dict) -> Optional[dict]:
     """PATCH to the backend API and return the JSON response, or None on error."""
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with _client() as client:
         try:
-            resp = await client.patch(f"{BACKEND_URL}/api/v1{path}", json=data)
+            resp = await client.patch(path, json=data)
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
             logger.error("API PATCH %s failed: %s", path, e)
             return None
+
+
+# ---------------------------------------------------------------------------
+# Access control
+# ---------------------------------------------------------------------------
+
+
+async def restrict_to_owner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Drop every update that doesn't come from an allowed user (runs before all handlers)."""
+    user = update.effective_user
+    if user is not None and user.id in ALLOWED_USER_IDS:
+        return
+    # Logged so the owner can find their own ID when first setting up the bot.
+    logger.warning(
+        "Ignoring update from unauthorized user id=%s (add it to TELEGRAM_ALLOWED_USER_IDS if this is you)",
+        user.id if user else None,
+    )
+    raise ApplicationHandlerStop
 
 
 # ---------------------------------------------------------------------------
@@ -478,7 +509,16 @@ def main() -> None:
         logger.error("TELEGRAM_BOT_TOKEN is not set. Bot cannot start.")
         return
 
+    if not ALLOWED_USER_IDS:
+        logger.warning(
+            "TELEGRAM_ALLOWED_USER_IDS is not set — the bot will ignore everyone. "
+            "Message the bot once, copy your id from the log, and set it."
+        )
+
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Group -1 runs before the default group 0, so unauthorized updates never reach a handler.
+    app.add_handler(TypeHandler(Update, restrict_to_owner), group=-1)
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("history", history))

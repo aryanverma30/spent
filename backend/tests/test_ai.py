@@ -79,3 +79,18 @@ async def test_parse_transaction_raises_runtime_error_on_api_error() -> None:
 
         with pytest.raises(RuntimeError, match="AI service unavailable"):
             await parse_transaction("$10 coffee")
+
+
+async def test_parse_transaction_replaces_unknown_category_with_other() -> None:
+    """An invented category becomes Other with zero confidence so the bot asks to confirm."""
+    invented = '{"amount": 30.0, "merchant": "Olive Garden", "category": "Dining", "confidence": 0.9}'
+
+    with patch("app.services.ai.get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=_make_message(invented))
+        mock_get_client.return_value = mock_client
+
+        result = await parse_transaction("$30 Olive Garden")
+
+    assert result["category"] == "Other"
+    assert result["confidence"] == 0.0

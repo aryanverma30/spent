@@ -395,13 +395,53 @@
 
     let currentPeriod = 'monthly';
 
+    // ── Auth ──────────────────────────────────────────────────────────────
+    // The widget opens this page as /#token=<API_TOKEN>. The fragment never
+    // reaches the server or its logs; we save it to localStorage and strip it.
+    const TOKEN_KEY = 'spent_api_token';
+
+    function getToken() {
+      const fromHash = new URLSearchParams(location.hash.slice(1)).get('token');
+      if (fromHash) {
+        try { localStorage.setItem(TOKEN_KEY, fromHash); } catch (e) {}
+        history.replaceState(null, '', location.pathname + location.search);
+        return fromHash;
+      }
+      try { return localStorage.getItem(TOKEN_KEY); } catch (e) { return null; }
+    }
+
+    let apiToken = getToken();
+    let tokenPrompt = null;  // shared so parallel 401s only prompt once
+
+    function askForToken() {
+      if (!tokenPrompt) {
+        tokenPrompt = Promise.resolve().then(() => {
+          const entered = (prompt('Enter your Spent API token') || '').trim();
+          if (entered) {
+            apiToken = entered;
+            try { localStorage.setItem(TOKEN_KEY, entered); } catch (e) {}
+          }
+          return entered;
+        });
+      }
+      return tokenPrompt;
+    }
+
     // ── API helpers ───────────────────────────────────────────────────────
-    async function apiFetch(path) {
+    async function apiRequest(path) {
       // Use a relative URL so the request always matches the page's scheme
       // (avoids mixed-content blocks when Railway proxies http→https).
-      const res = await fetch(path);
+      const send = () => fetch(path, {
+        headers: apiToken ? { Authorization: `Bearer ${apiToken}` } : {},
+      });
+      let res = await send();
+      if (res.status === 401 && await askForToken()) res = await send();
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      return res.json();
+      return res;
+    }
+
+    async function apiFetch(path) {
+      return (await apiRequest(path)).json();
     }
 
     // ── Renderers ─────────────────────────────────────────────────────────
@@ -469,7 +509,14 @@
       donutImg.onload  = () => { donutPh.style.display = 'none'; donutImg.style.display = 'block'; };
       donutImg.onerror = () => { donutPh.innerHTML = '<div class="error-text">Chart unavailable</div>'; };
 
-      donutImg.src = `/api/v1/charts/donut?period=${period}`;
+      // Fetched as a blob because an <img src> request can't carry the auth header.
+      apiRequest(`/api/v1/charts/donut?period=${period}`)
+        .then(res => res.blob())
+        .then(blob => {
+          if (donutImg.src.startsWith('blob:')) URL.revokeObjectURL(donutImg.src);
+          donutImg.src = URL.createObjectURL(blob);
+        })
+        .catch(donutImg.onerror);
     }
 
     // ── Main load ─────────────────────────────────────────────────────────

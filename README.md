@@ -122,6 +122,8 @@ Open `.env` and fill in your real values:
 DATABASE_URL=postgresql+asyncpg://spent:spent@postgres:5432/spent
 ANTHROPIC_API_KEY=sk-ant-...
 TELEGRAM_BOT_TOKEN=1234567890:ABC...
+TELEGRAM_ALLOWED_USER_IDS=123456789
+API_TOKEN=generate-with-secrets.token_urlsafe
 AI_CONFIDENCE_THRESHOLD=0.75
 ENVIRONMENT=development
 ```
@@ -170,6 +172,8 @@ docker-compose exec backend alembic current
 | `DATABASE_URL` | Yes | — | asyncpg PostgreSQL connection string |
 | `ANTHROPIC_API_KEY` | Yes | — | Claude API key from console.anthropic.com |
 | `TELEGRAM_BOT_TOKEN` | Yes | — | Bot token from @BotFather |
+| `TELEGRAM_ALLOWED_USER_IDS` | Yes (bot) | — | Comma-separated Telegram user IDs the bot responds to; everyone else is ignored. Message the bot once and copy your id from its logs |
+| `API_TOKEN` | Yes (production) | — | Bearer token required on every `/api/v1` request. Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`. If unset, the API is open in development and refuses all requests in production |
 | `AI_CONFIDENCE_THRESHOLD` | No | `0.75` | Min AI confidence to auto-save (0.0–1.0) |
 | `ENVIRONMENT` | No | `development` | `development` or `production` (controls SQL echo) |
 
@@ -180,13 +184,13 @@ The widget is a [Scriptable](https://scriptable.app/) script that polls your bac
 1. Install the free **Scriptable** app from the App Store
 2. Open Scriptable and tap **+** to create a new script
 3. Paste the entire contents of `widget/spent.js` into the editor
-4. Change `BASE_URL` at the top of the script to your Railway deployment URL
+4. Change `BASE_URL` at the top of the script to your Railway deployment URL, and `API_TOKEN` to the same value as the backend's `API_TOKEN`
 5. Name the script **Spent** and save it
 6. Add a **medium** Scriptable widget to your iOS home screen
 7. Long-press the widget → **Edit Widget** → select **Spent**
 8. Optionally set a Parameter: `daily`, `weekly`, or `monthly` to pin that period
 
-The widget refreshes every 60 seconds and shows a donut chart with your top spending categories.
+The widget shows a donut chart with your top spending categories. Tapping it opens the web dashboard and passes along your token, so the dashboard works without logging in.
 
 ## Deployment (Railway)
 

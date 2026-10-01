@@ -6,6 +6,7 @@ from datetime import date as _date
 import anthropic
 
 from app.config import settings
+from app.constants import CATEGORIES
 
 logger = logging.getLogger(__name__)
 
@@ -109,10 +110,19 @@ async def parse_transaction(raw_input: str) -> dict:
         text = text.strip()
 
     try:
-        return json.loads(text)
+        result = json.loads(text)
     except json.JSONDecodeError as exc:
         logger.error("Claude returned non-JSON in parse_transaction: %r", text)
         raise RuntimeError(f"AI returned an unexpected response format: {exc}") from exc
+
+    # An invented category (e.g. "Dining") would be rejected on save; fall back to
+    # Other with zero confidence so the bot asks the user to pick one.
+    if "category" in result and result["category"] not in CATEGORIES:
+        logger.warning("Claude returned unknown category %r; using Other", result["category"])
+        result["category"] = "Other"
+        result["confidence"] = 0.0
+
+    return result
 
 
 async def generate_insights(breakdown: list[dict], days_remaining: int) -> str:

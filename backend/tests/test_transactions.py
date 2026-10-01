@@ -72,3 +72,26 @@ async def test_get_deleted_transaction_returns_404(client: AsyncClient) -> None:
     get_resp = await client.get("/api/v1/transactions", params={"limit": 100})
     ids = [t["id"] for t in get_resp.json()]
     assert transaction_id not in ids
+
+
+async def test_create_rejects_unknown_category(client: AsyncClient) -> None:
+    """POST /transactions rejects a category outside the CATEGORIES list."""
+    resp = await client.post("/api/v1/transactions", json={**_PAYLOAD, "category": "Dining"})
+    assert resp.status_code == 422
+
+
+async def test_patch_rejects_unknown_category(client: AsyncClient) -> None:
+    """PATCH /transactions/{id} rejects a category outside the CATEGORIES list."""
+    create_resp = await client.post("/api/v1/transactions", json=_PAYLOAD)
+    transaction_id = create_resp.json()["id"]
+
+    patch_resp = await client.patch(
+        f"/api/v1/transactions/{transaction_id}", json={"category": "Dining"}
+    )
+    assert patch_resp.status_code == 422
+
+
+async def test_learn_rejects_unknown_category(client: AsyncClient) -> None:
+    """POST /ai/learn rejects a category outside the CATEGORIES list."""
+    resp = await client.post("/api/v1/ai/learn", json={"merchant": "Chipotle", "category": "Dining"})
+    assert resp.status_code == 422
