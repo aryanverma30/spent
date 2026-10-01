@@ -1,10 +1,11 @@
 """AI endpoints for parsing natural language transaction input and recording learned mappings."""
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.schemas import validate_category
 from app.services.ai import parse_transaction
+from app.services.assistant import answer_question
 from app.services.db import get_session
 from app.services import merchant_learning
 
@@ -15,6 +16,12 @@ class ParseRequest(BaseModel):
     """Request body for the AI parse endpoint."""
 
     raw_input: str
+
+
+class AskRequest(BaseModel):
+    """Request body for a free-form spending question."""
+
+    question: str = Field(..., min_length=1, max_length=1000)
 
 
 class LearnRequest(BaseModel):
@@ -49,6 +56,19 @@ async def parse_transaction_endpoint(
             result["confidence"] = 1.0
 
     return result
+
+
+@router.post("/ask")
+async def ask(
+    request: AskRequest,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Answer a natural-language question about spending (e.g. "top 5 purchases this month")."""
+    try:
+        answer = await answer_question(request.question, session)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return {"answer": answer}
 
 
 @router.post("/learn")

@@ -7,6 +7,7 @@ from typing import Optional
 import httpx
 from dotenv import load_dotenv
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.constants import ChatAction
 from telegram.ext import (
     ApplicationBuilder,
     ApplicationHandlerStop,
@@ -51,15 +52,15 @@ CATEGORY_EMOJIS = {
 }
 
 
-def _client() -> httpx.AsyncClient:
+def _client(timeout: float = 30.0) -> httpx.AsyncClient:
     """Return an HTTP client that sends the backend API token on every request."""
     headers = {"Authorization": f"Bearer {API_TOKEN}"} if API_TOKEN else {}
-    return httpx.AsyncClient(base_url=f"{BACKEND_URL}/api/v1", headers=headers, timeout=30.0)
+    return httpx.AsyncClient(base_url=f"{BACKEND_URL}/api/v1", headers=headers, timeout=timeout)
 
 
-async def api_post(path: str, data: dict) -> Optional[dict]:
+async def api_post(path: str, data: dict, timeout: float = 30.0) -> Optional[dict]:
     """POST to the backend API and return the JSON response, or None on error."""
-    async with _client() as client:
+    async with _client(timeout) as client:
         try:
             resp = await client.post(path, json=data)
             resp.raise_for_status()
@@ -147,10 +148,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "  • `$12 Chipotle`\n"
         "  • `Uber $22`\n"
         "  • `Bought groceries for $45`\n\n"
-        "You can also ask about past spending:\n"
+        "You can also ask about your spending:\n"
         "  • `How much did I spend on May 4th?`\n"
-        "  • `Weekly spending of May 4th`\n"
-        "  • `Spending for April`\n\n"
+        "  • `Spending for April`\n"
+        "  • `Top 5 purchases this month`\n"
+        "  • `How much more on food than last month?`\n\n"
         "*Commands:*\n"
         "/history — your last 10 transactions\n"
         "/summary — this month's spending by category\n"
@@ -317,11 +319,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
         return
 
+    if parsed.get("type") == "question":
+        await update.message.chat.send_action(ChatAction.TYPING)
+        # Answering can take several Claude round-trips, so allow longer than usual.
+        result = await api_post("/ai/ask", {"question": raw_input}, timeout=90.0)
+        if not result:
+            await update.message.reply_text("❌ Couldn't answer that right now. Try again in a bit.")
+            return
+        # Plain text (no parse_mode): the answer may contain * or _ in merchant names.
+        await update.message.reply_text(result["answer"])
+        return
+
     if parsed.get("error") == "not_a_transaction":
         await update.message.reply_text(
             "🤷 Couldn't parse that as a transaction or spending query.\n\n"
             "To log: `$12 Chipotle` or `Uber $22`\n"
-            "To query: `How much did I spend on May 4th?`",
+            "To ask: `Top 5 purchases this month`",
             parse_mode="Markdown",
         )
         return

@@ -10,6 +10,8 @@
 - **iOS Scriptable home screen widget** with live data
 - **Daily, weekly, and monthly spending summaries** in the Telegram bot and web dashboard
 - **Natural language spending queries** — ask `"how much did I spend last week?"` and get a breakdown
+- **Ask anything about your spending** — `"top 5 purchases this month"`, `"how often do I go to Starbucks?"`, `"food vs last month?"`. Claude answers using read-only query tools over your transactions (`POST /api/v1/ai/ask`)
+- **Apple Pay auto-logging** via an iOS Shortcuts automation, with a Telegram confirmation you can correct or undo
 - **Inline category correction** directly in Telegram — tap to fix any miscategorization, bot learns for next time
 - **Web dashboard** with real-time charts served from the backend
 
@@ -69,7 +71,7 @@ spent/
 │   │   │   ├── insights.py      # GET /insights — AI-generated summary
 │   │   │   ├── categories.py    # GET /categories — full category list with totals
 │   │   │   ├── charts.py        # GET /charts/donut — PNG donut chart
-│   │   │   ├── ai.py            # POST /ai/parse, POST /ai/learn
+│   │   │   ├── ai.py            # POST /ai/parse, POST /ai/ask, POST /ai/learn
 │   │   │   └── dashboard.py     # GET / — serves the web UI
 │   │   ├── models/
 │   │   │   ├── transaction.py   # SQLAlchemy ORM model
@@ -77,6 +79,9 @@ spent/
 │   │   │   └── schemas.py       # Pydantic request/response schemas
 │   │   ├── services/
 │   │   │   ├── ai.py            # Claude API calls (parse + insights)
+│   │   │   ├── assistant.py     # Claude tool-use loop for free-form spending questions
+│   │   │   ├── auth.py          # Bearer-token check for /api/v1
+│   │   │   ├── telegram.py      # Backend → Telegram notifications (auto-logged purchases)
 │   │   │   ├── charts.py        # Matplotlib chart generation + period utilities
 │   │   │   ├── db.py            # Async engine, session factory, FastAPI dependency
 │   │   │   └── merchant_learning.py  # Merchant override upsert/lookup

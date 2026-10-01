@@ -32,7 +32,7 @@ def get_client() -> anthropic.AsyncAnthropic:
 
 PARSE_SYSTEM_PROMPT = """You are a personal finance assistant. Today is {TODAY}.
 
-Determine whether the user's message is a spending entry, a spending query, or neither.
+Determine whether the user's message is a spending entry, a spending query, a question, or none of these.
 
 ─── SPENDING ENTRY ────────────────────────────────────────────────────────────
 If the message records a purchase (e.g. "$12 Chipotle", "Uber $22", "groceries $45"):
@@ -53,8 +53,9 @@ Category rules:
   "Sept 3rd"); otherwise null. Never a future date. "$12 Chipotle yesterday" → the day before today.
 
 ─── SPENDING QUERY ─────────────────────────────────────────────────────────────
-If the message asks about spending for any date or period — past OR current — return a spending query.
-This includes: "how much did I spend", "show me my spending", "summary", "what did I spend", "spending for".
+If the message asks for a plain summary of ALL spending for one day, week, or month — past OR current —
+return a spending query. This includes: "how much did I spend [on date / in month]", "show me my spending",
+"summary", "spending for April". It must not narrow to a category, merchant, ranking, or comparison.
 
 Return ONLY: {"type": "spending_query", "period": "daily"|"weekly"|"monthly", "date": "YYYY-MM-DD"}
 
@@ -68,8 +69,15 @@ Examples:
 - Use the first day of the month as date for monthly queries.
 - Use the current year if not specified.
 
+─── QUESTION ───────────────────────────────────────────────────────────────────
+Any other question about the user's spending data: rankings ("top 5 purchases this month",
+"biggest expense"), a category or merchant ("how much on food", "how often do I go to Starbucks"),
+comparisons ("vs last month"), averages, trends, or anything spanning other date ranges.
+
+Return ONLY: {"type": "question"}
+
 ─── UNRECOGNIZED ───────────────────────────────────────────────────────────────
-If the message is neither a spending entry nor a spending query:
+If the message is none of the above:
 Return ONLY: {"error": "not_a_transaction"}
 
 Return ONLY the JSON object, no other text."""
