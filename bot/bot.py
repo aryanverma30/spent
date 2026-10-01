@@ -8,6 +8,7 @@ import httpx
 from dotenv import load_dotenv
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction
+from telegram.helpers import escape_markdown
 from telegram.ext import (
     ApplicationBuilder,
     ApplicationHandlerStop,
@@ -56,6 +57,11 @@ def _client(timeout: float = 30.0) -> httpx.AsyncClient:
     """Return an HTTP client that sends the backend API token on every request."""
     headers = {"Authorization": f"Bearer {API_TOKEN}"} if API_TOKEN else {}
     return httpx.AsyncClient(base_url=f"{BACKEND_URL}/api/v1", headers=headers, timeout=timeout)
+
+
+def md(text: object) -> str:
+    """Escape user-supplied text (merchant names) for parse_mode="Markdown" messages."""
+    return escape_markdown(str(text), version=1)
 
 
 async def api_post(path: str, data: dict, timeout: float = 30.0) -> Optional[dict]:
@@ -176,7 +182,7 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     for t in transactions:
         emoji = CATEGORY_EMOJIS.get(t["category"], "📦")
         lines.append(
-            f"{emoji} *{t['merchant']}* — ${float(t['amount']):.2f}\n"
+            f"{emoji} *{md(t['merchant'])}* — ${float(t['amount']):.2f}\n"
             f"   _{t['category']}_ • {t['occurred_at'][:10]}"
         )
 
@@ -277,7 +283,7 @@ async def handle_spending_query(
         lines.append("\n*Transactions:*")
         for t in transactions:
             emoji = CATEGORY_EMOJIS.get(t["category"], "📦")
-            lines.append(f"{emoji} {t['merchant']} — ${float(t['amount']):.2f}")
+            lines.append(f"{emoji} {md(t['merchant'])} — ${float(t['amount']):.2f}")
 
     caption = "\n".join(lines)
 
@@ -362,7 +368,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         emoji = CATEGORY_EMOJIS.get(category, "📦")
         text = (
             f"✅ *Logged!* Widget will refresh shortly ✓\n\n"
-            f"🏦 Merchant:  {merchant}\n"
+            f"🏦 Merchant:  {md(merchant)}\n"
             f"💰 Amount:   ${float(amount):.2f}\n"
             f"{date_line}"
             f"{emoji} Category: {category}"
@@ -382,13 +388,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         emoji = CATEGORY_EMOJIS.get(category, "📦")
         text = (
             f"🤔 *Is this right?*\n\n"
-            f"🏦 Merchant:  {merchant}\n"
+            f"🏦 Merchant:  {md(merchant)}\n"
             f"💰 Amount:   ${float(amount):.2f}\n"
             f"{date_line}"
             f"{emoji} Category: {category}\n"
             f"📊 Confidence: {confidence:.0%}"
         )
-        context.user_data["pending"] = {
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ Confirm", callback_data="confirm"),
+                InlineKeyboardButton("🏷 Change Category", callback_data="change_category"),
+            ]
+        ])
+        sent = await update.message.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
+        # Keyed by this message's id so several unconfirmed expenses don't overwrite each other.
+        context.user_data.setdefault("pending", {})[sent.message_id] = {
             "amount": amount,
             "merchant": merchant,
             "category": category,
@@ -396,18 +410,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             "ai_confidence": confidence,
             "occurred_at": occurred_on,
         }
-        keyboard = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("✅ Confirm", callback_data="confirm"),
-                InlineKeyboardButton("🏷 Change Category", callback_data="change_category"),
-            ]
-        ])
-        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
 
 
 # ---------------------------------------------------------------------------
 # Callback Query Handler (inline button presses)
 # ---------------------------------------------------------------------------
+
+
+def _pending_for(query, context: ContextTypes.DEFAULT_TYPE, remove: bool = False) -> Optional[dict]:
+    """Return (and optionally remove) the unconfirmed expense attached to the pressed message."""
+    pending = context.user_data.get("pending")
+    if not isinstance(pending, dict):
+        return None
+    if remove:
+        return pending.pop(query.message.message_id, None)
+    return pending.get(query.message.message_id)
 
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -425,7 +442,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await query.edit_message_text("❌ Could not delete transaction.")
 
     elif data == "confirm":
-        pending = context.user_data.get("pending")
+        pending = _pending_for(query, context)
         if not pending:
             await query.edit_message_text("❌ No pending transaction found.")
             return
@@ -434,11 +451,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             emoji = CATEGORY_EMOJIS.get(pending["category"], "📦")
             await query.edit_message_text(
                 f"✅ *Logged!*\n\n"
-                f"🏦 {pending['merchant']} — ${float(pending['amount']):.2f}\n"
+                f"🏦 {md(pending['merchant'])} — ${float(pending['amount']):.2f}\n"
                 f"{emoji} {pending['category']}",
                 parse_mode="Markdown",
             )
-            context.user_data.pop("pending", None)
+            _pending_for(query, context, remove=True)
         else:
             await query.edit_message_text("❌ Failed to save. Try again.")
 
@@ -494,7 +511,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     elif data.startswith("set_cat:"):
         new_category = data.split(":", 1)[1]
-        pending = context.user_data.get("pending")
+        pending = _pending_for(query, context)
         if not pending:
             await query.edit_message_text("❌ No pending transaction found.")
             return
@@ -508,11 +525,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             emoji = CATEGORY_EMOJIS.get(new_category, "📦")
             await query.edit_message_text(
                 f"✅ *Logged with updated category!*\n\n"
-                f"🏦 {pending['merchant']} — ${float(pending['amount']):.2f}\n"
+                f"🏦 {md(pending['merchant'])} — ${float(pending['amount']):.2f}\n"
                 f"{emoji} {new_category}",
                 parse_mode="Markdown",
             )
-            context.user_data.pop("pending", None)
+            _pending_for(query, context, remove=True)
         else:
             await query.edit_message_text("❌ Failed to save. Try again.")
 
