@@ -1,17 +1,28 @@
 """API routes for CRUD operations on transactions."""
+import logging
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.schemas import TransactionCreate, TransactionPatch, TransactionResponse
+from app.config import settings
+from app.models.schemas import (
+    AutoTransactionCreate,
+    TransactionCreate,
+    TransactionPatch,
+    TransactionResponse,
+)
 from app.models.transaction import Transaction
 from app.services import merchant_learning
+from app.services.ai import parse_transaction
 from app.services.charts import get_period_bounds
 from app.services.db import get_session
+from app.services.telegram import notify_auto_logged
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
@@ -33,12 +44,68 @@ async def create_transaction(
     session: AsyncSession = Depends(get_session),
 ) -> Transaction:
     """Create a new transaction record."""
-    transaction = Transaction(**data.model_dump())
+    # exclude_none so an omitted occurred_at falls back to the server default (now).
+    transaction = Transaction(**data.model_dump(exclude_none=True))
     session.add(transaction)
     await session.flush()
     await session.refresh(transaction)
     session.expunge(transaction)
     _coerce_amount(transaction)
+    return transaction
+
+
+async def _categorize(merchant: str, amount: float, session: AsyncSession) -> tuple[str, float]:
+    """Return (category, confidence): a learned merchant rule first, then Claude.
+
+    Never raises — if the AI is unavailable the purchase is still logged as
+    Other with zero confidence so it gets flagged for review.
+    """
+    override = await merchant_learning.get_override(merchant, session)
+    if override:
+        return override, 1.0
+    try:
+        result = await parse_transaction(f"${amount:.2f} {merchant}")
+    except Exception:
+        logger.exception("AI categorization failed for auto-logged %r", merchant)
+        return "Other", 0.0
+    if "category" not in result:
+        return "Other", 0.0
+    confidence = min(max(float(result.get("confidence", 0.0)), 0.0), 1.0)
+    return result["category"], confidence
+
+
+@router.post("/auto", response_model=TransactionResponse, status_code=201)
+async def auto_log_transaction(
+    data: AutoTransactionCreate,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
+) -> Transaction:
+    """Log a purchase reported by an automation (iOS Wallet trigger) and notify via Telegram."""
+    category, confidence = await _categorize(data.merchant, data.amount, session)
+
+    raw_input = f"[auto] {data.merchant} ${data.amount:.2f}"
+    if data.card:
+        raw_input += f" via {data.card}"
+
+    transaction = Transaction(
+        amount=data.amount,
+        merchant=data.merchant,
+        category=category,
+        raw_input=raw_input,
+        ai_confidence=confidence,
+    )
+    if data.occurred_at:
+        transaction.occurred_at = data.occurred_at
+    session.add(transaction)
+    await session.flush()
+    await session.refresh(transaction)
+    session.expunge(transaction)
+    _coerce_amount(transaction)
+
+    # Runs after the response is sent and the session has committed.
+    background_tasks.add_task(
+        notify_auto_logged, transaction, confidence < settings.ai_confidence_threshold
+    )
     return transaction
 
 
@@ -52,12 +119,12 @@ async def list_transactions(
     session: AsyncSession = Depends(get_session),
 ) -> list[Transaction]:
     """List transactions with optional category and period filters, paginated, newest first."""
-    query = select(Transaction).order_by(Transaction.created_at.desc())
+    query = select(Transaction).order_by(Transaction.occurred_at.desc())
     if category:
         query = query.where(Transaction.category == category)
     if period:
         start, end = get_period_bounds(period, date)
-        query = query.where(Transaction.created_at >= start).where(Transaction.created_at <= end)
+        query = query.where(Transaction.occurred_at >= start).where(Transaction.occurred_at <= end)
     query = query.limit(limit).offset(offset)
     result = await session.execute(query)
     transactions = list(result.scalars().all())

@@ -31,8 +31,8 @@ async def list_categories(
             func.sum(Transaction.amount).label("total"),
             func.count(Transaction.id).label("count"),
         )
-        .where(Transaction.created_at >= start)
-        .where(Transaction.created_at <= end)
+        .where(Transaction.occurred_at >= start)
+        .where(Transaction.occurred_at <= end)
         .group_by(Transaction.category)
     )
     rows = {row.category: {"total": float(row.total), "count": row.count} for row in result.all()}

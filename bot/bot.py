@@ -175,7 +175,7 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         emoji = CATEGORY_EMOJIS.get(t["category"], "📦")
         lines.append(
             f"{emoji} *{t['merchant']}* — ${float(t['amount']):.2f}\n"
-            f"   _{t['category']}_ • {t['created_at'][:10]}"
+            f"   _{t['category']}_ • {t['occurred_at'][:10]}"
         )
 
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
@@ -330,6 +330,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     merchant = parsed.get("merchant", "Unknown")
     category = parsed.get("category", "Other")
     confidence = parsed.get("confidence", 0.0)
+    occurred_on = parsed.get("occurred_on")  # "YYYY-MM-DD" if a date was mentioned
+    date_line = f"📅 Date:      {occurred_on}\n" if occurred_on else ""
 
     if confidence >= AI_CONFIDENCE_THRESHOLD:
         saved = await api_post("/transactions", {
@@ -338,6 +340,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             "category": category,
             "raw_input": raw_input,
             "ai_confidence": confidence,
+            "occurred_at": occurred_on,
         })
         if not saved:
             await update.message.reply_text("❌ Failed to save transaction. Try again.")
@@ -348,6 +351,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             f"✅ *Logged!* Widget will refresh shortly ✓\n\n"
             f"🏦 Merchant:  {merchant}\n"
             f"💰 Amount:   ${float(amount):.2f}\n"
+            f"{date_line}"
             f"{emoji} Category: {category}"
         )
         keyboard = InlineKeyboardMarkup([
@@ -367,6 +371,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             f"🤔 *Is this right?*\n\n"
             f"🏦 Merchant:  {merchant}\n"
             f"💰 Amount:   ${float(amount):.2f}\n"
+            f"{date_line}"
             f"{emoji} Category: {category}\n"
             f"📊 Confidence: {confidence:.0%}"
         )
@@ -376,6 +381,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             "category": category,
             "raw_input": raw_input,
             "ai_confidence": confidence,
+            "occurred_at": occurred_on,
         }
         keyboard = InlineKeyboardMarkup([
             [

@@ -1,15 +1,16 @@
 """AI insights endpoint — generates a spending summary for the current calendar month."""
 import calendar
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.constants import CATEGORY_COLORS
+from app.constants import CATEGORY_COLORS, LOCAL_TZ
 from app.models.transaction import Transaction
 from app.services.ai import generate_insights
+from app.services.charts import get_period_bounds
 from app.services.db import get_session
 
 logger = logging.getLogger(__name__)
@@ -21,8 +22,9 @@ router = APIRouter(prefix="/insights", tags=["insights"])
 async def get_insights(session: AsyncSession = Depends(get_session)) -> dict:
     """Get AI-generated spending insights for the current calendar month."""
     try:
-        now = datetime.now(timezone.utc)
-        start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        # Same local-time month boundaries as /summary, so the two always agree.
+        now = datetime.now(LOCAL_TZ)
+        start, end = get_period_bounds("monthly")
 
         result = await session.execute(
             select(
@@ -30,7 +32,8 @@ async def get_insights(session: AsyncSession = Depends(get_session)) -> dict:
                 func.sum(Transaction.amount).label("total"),
                 func.count(Transaction.id).label("count"),
             )
-            .where(Transaction.created_at >= start_of_month)
+            .where(Transaction.occurred_at >= start)
+            .where(Transaction.occurred_at <= end)
             .group_by(Transaction.category)
             .order_by(func.sum(Transaction.amount).desc())
         )

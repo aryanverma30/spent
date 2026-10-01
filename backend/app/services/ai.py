@@ -1,12 +1,12 @@
 """AI service for parsing transactions and generating insights using Claude."""
 import json
 import logging
-from datetime import date as _date
+from datetime import datetime
 
 import anthropic
 
 from app.config import settings
-from app.constants import CATEGORIES
+from app.constants import CATEGORIES, LOCAL_TZ
 
 logger = logging.getLogger(__name__)
 
@@ -30,13 +30,13 @@ def get_client() -> anthropic.AsyncAnthropic:
     return _client
 
 
-PARSE_SYSTEM_PROMPT = """You are a personal finance assistant. Today's date is {TODAY}.
+PARSE_SYSTEM_PROMPT = """You are a personal finance assistant. Today is {TODAY}.
 
 Determine whether the user's message is a spending entry, a spending query, or neither.
 
 ─── SPENDING ENTRY ────────────────────────────────────────────────────────────
 If the message records a purchase (e.g. "$12 Chipotle", "Uber $22", "groceries $45"):
-Return ONLY: {"amount": float, "merchant": string, "category": string, "confidence": float}
+Return ONLY: {"amount": float, "merchant": string, "category": string, "confidence": float, "occurred_on": "YYYY-MM-DD" | null}
 
 Allowed categories — use EXACTLY one of these strings:
 Food & Drink, Groceries, Transport, Entertainment, Shopping, Health, Housing, Travel, Pets, Other
@@ -49,6 +49,8 @@ Category rules:
 - amount must be a positive float (strip $ signs)
 - merchant should be a clean, capitalized name
 - confidence is 0-1 representing how sure you are
+- occurred_on: the purchase date ONLY if the message names one ("yesterday", "on Monday",
+  "Sept 3rd"); otherwise null. Never a future date. "$12 Chipotle yesterday" → the day before today.
 
 ─── SPENDING QUERY ─────────────────────────────────────────────────────────────
 If the message asks about spending for any date or period — past OR current — return a spending query.
@@ -87,7 +89,8 @@ async def parse_transaction(raw_input: str) -> dict:
     fails, or the model returns non-JSON output.  Callers should catch
     RuntimeError and surface a user-friendly message.
     """
-    today = _date.today().isoformat()
+    # Local date (not the server's UTC date) so "yesterday" means the user's yesterday.
+    today = datetime.now(LOCAL_TZ).strftime("%Y-%m-%d (%A)")
     system = PARSE_SYSTEM_PROMPT.replace("{TODAY}", today)
 
     client = get_client()

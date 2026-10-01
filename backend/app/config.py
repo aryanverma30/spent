@@ -56,6 +56,15 @@ class Settings(BaseSettings):
     # ── Telegram Bot (Phase 2) ────────────────────────────────────────────────
     telegram_bot_token: str = ""
 
+    # Comma-separated Telegram user IDs. The bot only answers these users, and
+    # the backend sends auto-logged purchase notifications to them.
+    telegram_allowed_user_ids: str = ""
+
+    @property
+    def telegram_owner_ids(self) -> list[int]:
+        """Return TELEGRAM_ALLOWED_USER_IDS parsed into a list of ints."""
+        return [int(uid) for uid in self.telegram_allowed_user_ids.split(",") if uid.strip()]
+
     # ── AI Settings (Phase 3) ─────────────────────────────────────────────────
     # Confidence threshold below which we fall back to category="other".
     ai_confidence_threshold: float = 0.75

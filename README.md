@@ -50,6 +50,10 @@
 4. If confidence is low, bot asks the user to confirm or recategorize
 5. The web dashboard and iOS widget poll `/api/v1/summary` for live charts
 
+**Apple Pay auto-logging:** an iOS Shortcuts automation POSTs every Apple Pay purchase to
+`/api/v1/transactions/auto`. The backend categorizes it (your learned merchant rules first,
+then Claude), saves it, and messages you on Telegram with **Change Category** / **Undo** buttons.
+
 ## Project Structure
 
 ```
@@ -172,10 +176,39 @@ docker-compose exec backend alembic current
 | `DATABASE_URL` | Yes | — | asyncpg PostgreSQL connection string |
 | `ANTHROPIC_API_KEY` | Yes | — | Claude API key from console.anthropic.com |
 | `TELEGRAM_BOT_TOKEN` | Yes | — | Bot token from @BotFather |
-| `TELEGRAM_ALLOWED_USER_IDS` | Yes (bot) | — | Comma-separated Telegram user IDs the bot responds to; everyone else is ignored. Message the bot once and copy your id from its logs |
+| `TELEGRAM_ALLOWED_USER_IDS` | Yes (bot) | — | Comma-separated Telegram user IDs the bot responds to; everyone else is ignored. Message the bot once and copy your id from its logs. Set it on the backend too so auto-logged purchases can notify you |
 | `API_TOKEN` | Yes (production) | — | Bearer token required on every `/api/v1` request. Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`. If unset, the API is open in development and refuses all requests in production |
 | `AI_CONFIDENCE_THRESHOLD` | No | `0.75` | Min AI confidence to auto-save (0.0–1.0) |
 | `ENVIRONMENT` | No | `development` | `development` or `production` (controls SQL echo) |
+
+## Auto-log Apple Pay Purchases (iOS 17+)
+
+Every time you pay with Apple Pay, an iOS Shortcuts automation sends the purchase to Spent. You
+get a Telegram message a few seconds later and only need to act if the category is wrong.
+
+**Backend:** make sure `API_TOKEN`, `TELEGRAM_BOT_TOKEN`, and `TELEGRAM_ALLOWED_USER_IDS` are set
+on the backend service (not just the bot), so it can send you the notification.
+
+**iPhone:**
+
+1. Open **Shortcuts** → **Automation** tab → **+** (New Automation) → **Transaction**
+2. Choose the cards to watch (leave merchants/categories as **Any**), select **Run Immediately**, then **Next**
+3. Choose **New Blank Automation** and add the **Get Contents of URL** action
+4. Set the URL to `https://your-app.railway.app/api/v1/transactions/auto` and expand the action:
+   - **Method:** `POST`
+   - **Headers:** `Authorization` = `Bearer <your API_TOKEN>`
+   - **Request Body:** `JSON`, with three **Text** fields. For each value, tap the field and pick the
+     **Shortcut Input** variable, then tap it again to choose the property:
+     - `merchant` → Shortcut Input › **Merchant**
+     - `amount` → Shortcut Input › **Amount**
+     - `card` → Shortcut Input › **Card or Pass** (optional)
+5. Tap **Done**. Test it by sending the same request from the action's play button, or just buy a coffee.
+
+`amount` can be a number or a currency string like `$1,234.56`. You can also send an optional
+`occurred_at` (ISO 8601); it defaults to the time the request arrives.
+
+**What it doesn't catch:** the Wallet trigger only fires for Apple Pay. Swiping or inserting a
+physical card, or typing your card number online, still needs a Telegram message.
 
 ## iOS Widget Setup
 

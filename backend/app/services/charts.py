@@ -2,16 +2,12 @@
 import io
 from datetime import date as _date
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 
 import matplotlib
 matplotlib.use("Agg")  # Must be called before importing pyplot — headless rendering
 import matplotlib.pyplot as plt
 
-from app.constants import CATEGORY_COLORS
-
-
-_CHICAGO = ZoneInfo("America/Chicago")
+from app.constants import CATEGORY_COLORS, LOCAL_TZ
 
 
 def get_period_bounds(period: str, date: str | None = None) -> tuple[datetime, datetime]:
@@ -28,10 +24,10 @@ def get_period_bounds(period: str, date: str | None = None) -> tuple[datetime, d
     now = datetime.now(timezone.utc)
 
     if date is None:
-        target_local = now.astimezone(_CHICAGO)
+        target_local = now.astimezone(LOCAL_TZ)
     else:
         d = _date.fromisoformat(date)
-        target_local = datetime(d.year, d.month, d.day, 12, 0, 0, tzinfo=_CHICAGO)
+        target_local = datetime(d.year, d.month, d.day, 12, 0, 0, tzinfo=LOCAL_TZ)
 
     if period == "daily":
         local_midnight = target_local.replace(hour=0, minute=0, second=0, microsecond=0)

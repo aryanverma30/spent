@@ -483,8 +483,8 @@
       return transactions.map(t => {
         const emoji  = CATEGORY_EMOJIS[t.category] || '📦';
         const amount = isNaN(parseFloat(t.amount)) ? '0.00' : parseFloat(t.amount).toFixed(2);
-        const date   = t.created_at
-          ? new Date(t.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        const date   = t.occurred_at
+          ? new Date(t.occurred_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
           : '—';
         return `
           <div class="tx-row">

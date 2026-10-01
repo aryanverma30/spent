@@ -4,6 +4,11 @@ This is the single source of truth for the category list and colour palette
 used by the AI service, the insights route, and the chart generator.
 bot/constants.py mirrors this file for the Telegram bot (separate container).
 """
+from zoneinfo import ZoneInfo
+
+# Spending days, weeks and months are bucketed in this time zone, and naive
+# timestamps sent to the API are interpreted in it.
+LOCAL_TZ = ZoneInfo("America/Chicago")
 
 CATEGORIES: list[str] = [
     "Food & Drink",
