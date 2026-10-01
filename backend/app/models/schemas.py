@@ -84,3 +84,11 @@ class TransactionResponse(BaseModel):
     occurred_at: datetime
     created_at: datetime
     updated_at: datetime
+    # Set only on create: budget thresholds (80% / 100%) this purchase crossed.
+    budget_alerts: list[str] = []
+
+
+class BudgetUpdate(BaseModel):
+    """Schema for setting a monthly budget."""
+
+    monthly_limit: float = Field(..., gt=0, le=1_000_000)

@@ -3,6 +3,7 @@ import logging
 import os
 from io import BytesIO
 from typing import Optional
+from urllib.parse import quote
 
 import httpx
 from dotenv import load_dotenv
@@ -111,6 +112,18 @@ async def api_delete(path: str) -> bool:
             return False
 
 
+async def api_put(path: str, data: dict) -> Optional[dict]:
+    """PUT to the backend API and return the JSON response, or None on error."""
+    async with _client() as client:
+        try:
+            resp = await client.put(path, json=data)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            logger.error("API PUT %s failed: %s", path, e)
+            return None
+
+
 async def api_patch(path: str, data: dict) -> Optional[dict]:
     """PATCH to the backend API and return the JSON response, or None on error."""
     async with _client() as client:
@@ -163,6 +176,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/history — your last 10 transactions\n"
         "/summary — this month's spending by category\n"
         "/insights — AI-generated spending insights\n"
+        "/budgets — this month's budgets (set one with `food budget 300`)\n"
         "/delete — delete recent transactions\n"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
@@ -233,6 +247,55 @@ async def delete_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             [InlineKeyboardButton("🗑 Delete", callback_data=f"delete:{t['id']}")]
         ])
         await update.message.reply_text(text, reply_markup=keyboard)
+
+
+def _budget_line(b: dict) -> str:
+    """One plain-text line describing a budget's status."""
+    name = "Total" if b["category"] == "Total" else f"{CATEGORY_EMOJIS.get(b['category'], '📦')} {b['category']}"
+    if b["remaining"] < 0:
+        state = f"🚨 ${-b['remaining']:,.2f} over"
+    else:
+        pace = "on track" if b["on_track"] else f"⚠️ on pace for ${b['projected']:,.0f}"
+        state = f"${b['remaining']:,.2f} left (${b['daily_allowance']:,.2f}/day), {pace}"
+    return f"{name}: ${b['spent']:,.2f} of ${b['monthly_limit']:,.2f} — {state}"
+
+
+async def budgets_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show this month's budgets."""
+    data = await api_get("/budgets")
+    if data is None:
+        await update.message.reply_text("Couldn't fetch budgets. Is the backend running?")
+        return
+    if not data["budgets"]:
+        await update.message.reply_text(
+            "No budgets yet. Set one by messaging something like:\n"
+            "• food budget 300\n• total budget 2000"
+        )
+        return
+    lines = ["📅 Budgets this month\n"] + [_budget_line(b) for b in data["budgets"]]
+    await update.message.reply_text("\n".join(lines))
+
+
+async def handle_set_budget(update: Update, category: str, amount: Optional[float]) -> None:
+    """Create, update, or remove a monthly budget."""
+    path = f"/budgets/{quote(category, safe='')}"
+    if amount is None:
+        if await api_delete(path):
+            await update.message.reply_text(f"🗑 Removed your {category} budget.")
+        else:
+            await update.message.reply_text(f"There's no {category} budget to remove.")
+        return
+    status = await api_put(path, {"monthly_limit": amount})
+    if not status:
+        await update.message.reply_text("❌ Couldn't save that budget. Try again.")
+        return
+    await update.message.reply_text(f"✅ Budget set.\n\n{_budget_line(status)}")
+
+
+def _with_alerts(text: str, saved: dict) -> str:
+    """Append any budget alerts returned by the backend to a confirmation message."""
+    alerts = saved.get("budget_alerts") or []
+    return text + ("\n\n" + "\n".join(md(a) for a in alerts) if alerts else "")
 
 
 # ---------------------------------------------------------------------------
@@ -336,6 +399,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(result["answer"])
         return
 
+    if parsed.get("type") == "set_budget":
+        await handle_set_budget(update, parsed["category"], parsed.get("amount"))
+        return
+
     if parsed.get("error") == "not_a_transaction":
         await update.message.reply_text(
             "🤷 Couldn't parse that as a transaction or spending query.\n\n"
@@ -373,6 +440,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             f"{date_line}"
             f"{emoji} Category: {category}"
         )
+        text = _with_alerts(text, saved)
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton(
@@ -450,9 +518,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if saved:
             emoji = CATEGORY_EMOJIS.get(pending["category"], "📦")
             await query.edit_message_text(
-                f"✅ *Logged!*\n\n"
-                f"🏦 {md(pending['merchant'])} — ${float(pending['amount']):.2f}\n"
-                f"{emoji} {pending['category']}",
+                _with_alerts(
+                    f"✅ *Logged!*\n\n"
+                    f"🏦 {md(pending['merchant'])} — ${float(pending['amount']):.2f}\n"
+                    f"{emoji} {pending['category']}",
+                    saved,
+                ),
                 parse_mode="Markdown",
             )
             _pending_for(query, context, remove=True)
@@ -524,9 +595,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             })
             emoji = CATEGORY_EMOJIS.get(new_category, "📦")
             await query.edit_message_text(
-                f"✅ *Logged with updated category!*\n\n"
-                f"🏦 {md(pending['merchant'])} — ${float(pending['amount']):.2f}\n"
-                f"{emoji} {new_category}",
+                _with_alerts(
+                    f"✅ *Logged with updated category!*\n\n"
+                    f"🏦 {md(pending['merchant'])} — ${float(pending['amount']):.2f}\n"
+                    f"{emoji} {new_category}",
+                    saved,
+                ),
                 parse_mode="Markdown",
             )
             _pending_for(query, context, remove=True)
@@ -561,6 +635,7 @@ def main() -> None:
     app.add_handler(CommandHandler("summary", summary_command))
     app.add_handler(CommandHandler("insights", insights_command))
     app.add_handler(CommandHandler("delete", delete_command))
+    app.add_handler(CommandHandler("budgets", budgets_command))
 
     app.add_handler(CallbackQueryHandler(handle_callback))
 

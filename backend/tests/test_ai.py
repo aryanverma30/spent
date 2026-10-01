@@ -94,3 +94,17 @@ async def test_parse_transaction_replaces_unknown_category_with_other() -> None:
 
     assert result["category"] == "Other"
     assert result["confidence"] == 0.0
+
+
+async def test_parse_transaction_keeps_total_for_budget_changes() -> None:
+    """The unknown-category fallback only applies to expenses, so "Total" budgets survive."""
+    budget = '{"type": "set_budget", "category": "Total", "amount": 2000}'
+
+    with patch("app.services.ai.get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=_make_message(budget))
+        mock_get_client.return_value = mock_client
+
+        result = await parse_transaction("budget 2000 a month")
+
+    assert result == {"type": "set_budget", "category": "Total", "amount": 2000}

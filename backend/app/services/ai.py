@@ -32,7 +32,7 @@ def get_client() -> anthropic.AsyncAnthropic:
 
 PARSE_SYSTEM_PROMPT = """You are a personal finance assistant. Today is {TODAY}.
 
-Determine whether the user's message is a spending entry, a spending query, a question, or none of these.
+Determine whether the user's message is a spending entry, a spending query, a question, a budget change, or none of these.
 
 ─── SPENDING ENTRY ────────────────────────────────────────────────────────────
 If the message records a purchase (e.g. "$12 Chipotle", "Uber $22", "groceries $45"):
@@ -75,6 +75,13 @@ Any other question about the user's spending data: rankings ("top 5 purchases th
 comparisons ("vs last month"), averages, trends, or anything spanning other date ranges.
 
 Return ONLY: {"type": "question"}
+
+─── BUDGET CHANGE ──────────────────────────────────────────────────────────────
+If the message sets or removes a monthly budget ("set food budget to 300", "budget $2000 a month",
+"$150 shopping budget", "remove my travel budget"):
+Return ONLY: {"type": "set_budget", "category": string, "amount": float | null}
+- category: one of the allowed categories above, or "Total" for an overall budget with no category
+- amount: the monthly limit; null when removing the budget
 
 ─── UNRECOGNIZED ───────────────────────────────────────────────────────────────
 If the message is none of the above:
@@ -128,7 +135,7 @@ async def parse_transaction(raw_input: str) -> dict:
 
     # An invented category (e.g. "Dining") would be rejected on save; fall back to
     # Other with zero confidence so the bot asks the user to pick one.
-    if "category" in result and result["category"] not in CATEGORIES:
+    if "amount" in result and "type" not in result and result.get("category") not in CATEGORIES:
         logger.warning("Claude returned unknown category %r; using Other", result["category"])
         result["category"] = "Other"
         result["confidence"] = 0.0

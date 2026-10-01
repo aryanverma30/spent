@@ -12,6 +12,8 @@
 - **Natural language spending queries** — ask `"how much did I spend last week?"` and get a breakdown
 - **Ask anything about your spending** — `"top 5 purchases this month"`, `"how often do I go to Starbucks?"`, `"food vs last month?"`. Claude answers using read-only query tools over your transactions (`POST /api/v1/ai/ask`)
 - **Apple Pay auto-logging** via an iOS Shortcuts automation, with a Telegram confirmation you can correct or undo
+- **Monthly budgets** per category or overall — set them in plain English (`"food budget 300"`, `"total budget 2000"`), see them with `/budgets`, and get a Telegram alert when a purchase crosses 80% or 100%. The widget colors over-budget categories and shows what's left per day
+- **Compared with last period** — the widget and `/summary` compare against the same point last month/week/day (e.g. Sep 1–15 vs Aug 1–15)
 - **Inline category correction** directly in Telegram — tap to fix any miscategorization, bot learns for next time
 - **Web dashboard** with real-time charts served from the backend
 
@@ -70,6 +72,7 @@ spent/
 │   │   │   ├── summary.py       # GET /summary — breakdown by category
 │   │   │   ├── insights.py      # GET /insights — AI-generated summary
 │   │   │   ├── categories.py    # GET /categories — full category list with totals
+│   │   │   ├── budgets.py       # GET/PUT/DELETE /budgets — monthly limits + live status
 │   │   │   ├── charts.py        # GET /charts/donut — PNG donut chart
 │   │   │   ├── ai.py            # POST /ai/parse, POST /ai/ask, POST /ai/learn
 │   │   │   └── dashboard.py     # GET / — serves the web UI
@@ -80,6 +83,7 @@ spent/
 │   │   ├── services/
 │   │   │   ├── ai.py            # Claude API calls (parse + insights)
 │   │   │   ├── assistant.py     # Claude tool-use loop for free-form spending questions
+│   │   │   ├── budgets.py       # Budget status, pace projection, 80%/100% alerts
 │   │   │   ├── auth.py          # Bearer-token check for /api/v1
 │   │   │   ├── telegram.py      # Backend → Telegram notifications (auto-logged purchases)
 │   │   │   ├── charts.py        # Matplotlib chart generation + period utilities
@@ -228,7 +232,7 @@ The widget is a [Scriptable](https://scriptable.app/) script that polls your bac
 7. Long-press the widget → **Edit Widget** → select **Spent**
 8. Optionally set a Parameter: `daily`, `weekly`, or `monthly` to pin that period
 
-The widget shows a donut chart with your top spending categories. Tapping it opens the web dashboard and passes along your token, so the dashboard works without logging in.
+The widget shows a donut chart with your top spending categories and the change vs the previous period. On the monthly view, category amounts turn orange at 80% of their budget and red when over, and the footer shows how much of your Total budget is left per day. Tapping it opens the web dashboard and passes along your token, so the dashboard works without logging in.
 
 ## Deployment (Railway)
 

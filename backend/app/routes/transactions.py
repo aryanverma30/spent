@@ -18,6 +18,7 @@ from app.models.schemas import (
 from app.models.transaction import Transaction
 from app.services import merchant_learning
 from app.services.ai import parse_transaction
+from app.services.budgets import alerts_for
 from app.services.charts import get_period_bounds
 from app.services.db import get_session
 from app.services.telegram import notify_auto_logged
@@ -42,16 +43,17 @@ def _coerce_amount(transaction: Transaction) -> None:
 async def create_transaction(
     data: TransactionCreate,
     session: AsyncSession = Depends(get_session),
-) -> Transaction:
-    """Create a new transaction record."""
+) -> TransactionResponse:
+    """Create a new transaction record, reporting any budget thresholds it crossed."""
     # exclude_none so an omitted occurred_at falls back to the server default (now).
     transaction = Transaction(**data.model_dump(exclude_none=True))
     session.add(transaction)
     await session.flush()
     await session.refresh(transaction)
+    alerts = await alerts_for(transaction, session)
     session.expunge(transaction)
     _coerce_amount(transaction)
-    return transaction
+    return TransactionResponse.model_validate(transaction).model_copy(update={"budget_alerts": alerts})
 
 
 async def _categorize(merchant: str, amount: float, session: AsyncSession) -> tuple[str, float]:
@@ -79,7 +81,7 @@ async def auto_log_transaction(
     data: AutoTransactionCreate,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_session),
-) -> Transaction:
+) -> TransactionResponse:
     """Log a purchase reported by an automation (iOS Wallet trigger) and notify via Telegram."""
     category, confidence = await _categorize(data.merchant, data.amount, session)
 
@@ -99,14 +101,15 @@ async def auto_log_transaction(
     session.add(transaction)
     await session.flush()
     await session.refresh(transaction)
+    alerts = await alerts_for(transaction, session)
     session.expunge(transaction)
     _coerce_amount(transaction)
 
     # Runs after the response is sent and the session has committed.
     background_tasks.add_task(
-        notify_auto_logged, transaction, confidence < settings.ai_confidence_threshold
+        notify_auto_logged, transaction, confidence < settings.ai_confidence_threshold, alerts
     )
-    return transaction
+    return TransactionResponse.model_validate(transaction).model_copy(update={"budget_alerts": alerts})
 
 
 @router.get("", response_model=list[TransactionResponse])

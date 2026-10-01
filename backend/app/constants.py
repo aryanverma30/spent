@@ -23,6 +23,9 @@ CATEGORIES: list[str] = [
     "Other",
 ]
 
+# Budget key for the overall monthly limit across all categories.
+BUDGET_TOTAL = "Total"
+
 CATEGORY_COLORS: dict[str, str] = {
     "Food & Drink": "#FF6B6B",
     "Groceries": "#52B788",

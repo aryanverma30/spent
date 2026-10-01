@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.constants import CATEGORIES, LOCAL_TZ
 from app.models.transaction import Transaction
 from app.services.ai import get_client
+from app.services.budgets import budget_status
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,17 @@ TOOLS: list[dict[str, Any]] = [
             "required": ["start_date", "end_date"],
             "additionalProperties": False,
         },
+    },
+    {
+        "name": "budget_status",
+        "description": (
+            "This month's budgets: limit, spent, remaining, percent used, daily allowance for "
+            "the rest of the month, projected month-end spend, and whether it's on track. "
+            "'Total' is the overall budget. Use for 'am I on track', 'how much can I spend', "
+            "or anything about budgets. Returns an empty list if no budgets are set."
+        ),
+        "strict": True,
+        "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
     {
         "name": "spending_totals",
@@ -217,7 +229,16 @@ async def spending_totals(args: dict[str, Any], session: AsyncSession) -> dict[s
     }
 
 
-_HANDLERS = {"find_transactions": find_transactions, "spending_totals": spending_totals}
+async def get_budget_status(args: dict[str, Any], session: AsyncSession) -> dict[str, Any]:
+    """Return this month's budget statuses."""
+    return {"budgets": await budget_status(session)}
+
+
+_HANDLERS = {
+    "find_transactions": find_transactions,
+    "spending_totals": spending_totals,
+    "budget_status": get_budget_status,
+}
 
 
 async def _run_tool(name: str, args: dict[str, Any], session: AsyncSession) -> dict[str, Any]:

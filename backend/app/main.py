@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routes import ai, categories, charts, dashboard, insights, summary, transactions
+from app.routes import ai, budgets, categories, charts, dashboard, insights, summary, transactions
 from app.services.auth import require_api_token
 from app.services.db import engine
 
@@ -52,6 +52,7 @@ app.include_router(transactions.router, prefix="/api/v1", dependencies=_api_auth
 app.include_router(summary.router, prefix="/api/v1", dependencies=_api_auth)
 app.include_router(insights.router, prefix="/api/v1", dependencies=_api_auth)
 app.include_router(categories.router, prefix="/api/v1", dependencies=_api_auth)
+app.include_router(budgets.router, prefix="/api/v1", dependencies=_api_auth)
 
 # AI parsing
 app.include_router(ai.router, prefix="/api/v1", dependencies=_api_auth)

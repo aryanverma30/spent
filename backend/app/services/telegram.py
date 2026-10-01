@@ -22,7 +22,9 @@ _EMOJIS = {
 }
 
 
-async def notify_auto_logged(transaction: Transaction, needs_review: bool) -> None:
+async def notify_auto_logged(
+    transaction: Transaction, needs_review: bool, budget_alerts: list[str] | None = None
+) -> None:
     """Message the owner about an auto-logged purchase, with Change Category / Undo buttons.
 
     The buttons reuse the bot's existing callback handlers (change_cat_saved:, delete:).
@@ -41,6 +43,8 @@ async def notify_auto_logged(transaction: Transaction, needs_review: bool) -> No
         f"💰 ${float(transaction.amount):.2f}\n"
         f"{emoji} {transaction.category}"
     )
+    if budget_alerts:
+        text += "\n\n" + "\n".join(budget_alerts)
     reply_markup = {
         "inline_keyboard": [[
             {"text": "🏷 Change Category", "callback_data": f"change_cat_saved:{transaction.id}"},

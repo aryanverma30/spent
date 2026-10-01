@@ -29,6 +29,9 @@ const DARK_BG = new Color('#1A1A2E');
 const ACCENT = new Color('#4ECDC4');
 const WHITE = Color.white();
 const GRAY = new Color('#AAAAAA');
+const RED = new Color('#FF6B6B');
+const ORANGE = new Color('#F0A500');
+const GREEN = new Color('#52B788');
 
 // ── Category colors matching backend/app/constants.py ──────
 const CATEGORY_COLORS = {
@@ -128,6 +131,35 @@ async function fetchDonutChart(period) {
   }
 }
 
+/**
+ * Fetch this month's budgets. Optional: the widget renders fine without them.
+ * @returns {Promise<Object[]>} Budget status list (empty on error or none set)
+ */
+async function fetchBudgets() {
+  try {
+    const req = apiRequest('/budgets', 10);
+    const json = await req.loadJSON();
+    return req.response.statusCode === 200 ? json.budgets || [] : [];
+  } catch (e) {
+    console.error('fetchBudgets failed: ' + e.message);
+    return [];
+  }
+}
+
+/**
+ * Color for an amount given its budget: red if over, orange from 80%, otherwise white.
+ * @param {Object|undefined} budget - Budget status for the category, if one is set
+ * @returns {Color}
+ */
+function budgetColor(budget) {
+  if (!budget) return WHITE;
+  if (budget.percent_used >= 100) return RED;
+  if (budget.percent_used >= 80) return ORANGE;
+  return WHITE;
+}
+
+const PREVIOUS_LABEL = { monthly: 'last mo', weekly: 'last wk', daily: 'yest.' };
+
 // ── Widget builder ──────────────────────────────────────────
 
 /**
@@ -135,9 +167,10 @@ async function fetchDonutChart(period) {
  * @param {Object|null} summary - Parsed summary JSON from the API, or null on fetch failure.
  * @param {Image|null} chartImg - Donut chart image, or null if unavailable.
  * @param {string} period - The active period label.
+ * @param {Object[]} budgets - This month's budget statuses (may be empty).
  * @returns {Promise<ListWidget>}
  */
-async function buildWidget(summary, chartImg, period) {
+async function buildWidget(summary, chartImg, period, budgets) {
   const widget = new ListWidget();
   widget.backgroundColor = DARK_BG;
   widget.setPadding(12, 14, 12, 14);
@@ -200,6 +233,17 @@ async function buildWidget(summary, chartImg, period) {
     totalLabel.textColor = WHITE;
     totalLabel.font = Font.boldSystemFont(14);
     totalLabel.centerAlignText();
+
+    // Change vs the same point in the previous period (more spending = red).
+    if (summary.change_pct !== null && summary.change_pct !== undefined) {
+      const up = summary.change_pct > 0;
+      const changeText = imgStack.addText(
+        `${up ? '▲' : '▼'}${Math.abs(summary.change_pct).toFixed(0)}% vs ${PREVIOUS_LABEL[period]}`
+      );
+      changeText.textColor = up ? RED : GREEN;
+      changeText.font = Font.mediumSystemFont(9);
+      changeText.centerAlignText();
+    }
   } else {
     const placeholder = contentStack.addText('📊');
     placeholder.font = Font.systemFont(40);
@@ -214,6 +258,7 @@ async function buildWidget(summary, chartImg, period) {
 
   const breakdown = summary.breakdown || [];
   const topItems = breakdown.slice(0, 4); // show top 4 categories
+  const budgetsByCategory = Object.fromEntries(budgets.map((b) => [b.category, b]));
 
   for (const item of topItems) {
     const rowStack = breakdownStack.addStack();
@@ -235,7 +280,8 @@ async function buildWidget(summary, chartImg, period) {
     rowStack.addSpacer();
 
     const amtText = rowStack.addText(`$${item.total.toFixed(0)}`);
-    amtText.textColor = WHITE;
+    // Budgets are monthly, so only color amounts on the monthly view.
+    amtText.textColor = period === 'monthly' ? budgetColor(budgetsByCategory[item.category]) : WHITE;
     amtText.font = Font.mediumSystemFont(10);
 
     breakdownStack.addSpacer(3);
@@ -249,10 +295,27 @@ async function buildWidget(summary, chartImg, period) {
 
   widget.addSpacer();
 
-  // Footer: last updated
+  // Footer: overall budget (monthly view) on the left, last updated on the right
+  const footerStack = widget.addStack();
+  footerStack.layoutHorizontally();
+  footerStack.centerAlignContent();
+
+  const total = budgetsByCategory['Total'];
+  if (period === 'monthly' && total) {
+    const budgetText = footerStack.addText(
+      total.remaining < 0
+        ? `$${(-total.remaining).toFixed(0)} over budget`
+        : `$${total.remaining.toFixed(0)} left · $${total.daily_allowance.toFixed(0)}/day`
+    );
+    budgetText.textColor = budgetColor(total) === WHITE ? ACCENT : budgetColor(total);
+    budgetText.font = Font.mediumSystemFont(9);
+  }
+
+  footerStack.addSpacer();
+
   const now = new Date();
   const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const footer = widget.addText(`Updated ${timeStr}`);
+  const footer = footerStack.addText(`Updated ${timeStr}`);
   footer.textColor = GRAY;
   footer.font = Font.systemFont(8);
 
@@ -302,10 +365,14 @@ async function run() {
     if (choice === 0) period = cyclePeriod(period);
   }
 
-  const [summary, chartImg] = await Promise.all([fetchSummary(period), fetchDonutChart(period)]);
+  const [summary, chartImg, budgets] = await Promise.all([
+    fetchSummary(period),
+    fetchDonutChart(period),
+    fetchBudgets(),
+  ]);
   if (summary) markFetched();
 
-  const widget = await buildWidget(summary, chartImg, period);
+  const widget = await buildWidget(summary, chartImg, period, budgets);
 
   // Ask Scriptable to re-run this script in ~1 minute so the widget
   // reflects new transactions quickly without waiting for iOS to schedule it.
