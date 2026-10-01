@@ -42,6 +42,7 @@ if config.config_file_name is not None:
 from app.services.db import Base                  # noqa: E402
 from app.models import transaction                # noqa: E402, F401  (import for side effects)
 from app.models import merchant_override          # noqa: E402, F401  (import for side effects)
+from app.models import budget                     # noqa: E402, F401  (import for side effects)
 
 # ── Target Metadata ───────────────────────────────────────────────────────────
 # This tells Alembic which tables to compare against the live database.
