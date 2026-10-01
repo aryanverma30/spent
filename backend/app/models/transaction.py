@@ -25,6 +25,12 @@ class Transaction(Base):
     raw_input: Mapped[str] = mapped_column(Text, nullable=False)
     ai_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # When the purchase happened (can be backdated). created_at is when it was logged.
+    occurred_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         server_default=func.now(),
@@ -38,9 +44,9 @@ class Transaction(Base):
     )
 
     __table_args__ = (
-        Index("ix_transactions_created_at", "created_at"),
+        Index("ix_transactions_occurred_at", "occurred_at"),
         Index("ix_transactions_category", "category"),
-        Index("ix_transactions_category_created_at", "category", "created_at"),
+        Index("ix_transactions_category_occurred_at", "category", "occurred_at"),
     )
 
     def __repr__(self) -> str:
